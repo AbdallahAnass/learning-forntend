@@ -7,9 +7,11 @@ export function register(data) {
   });
 }
 
-export function login(credentials) {
+export function login({ email, password }) {
+  const body = new URLSearchParams({ username: email, password });
   return apiFetch("/auth/login", {
     method: "POST",
-    body: JSON.stringify(credentials),
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
   });
 }
