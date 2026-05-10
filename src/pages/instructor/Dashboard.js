@@ -5,6 +5,7 @@ import InstructorLayout from "@/components/InstructorLayout";
 import { Button } from "@/components/ui/button";
 import { getInstructorCourses, getCourseAnalytics } from "@/api/instructor";
 import { getCourseReviews } from "@/api/reviews";
+import { fetchThumbnailUrl } from "@/api/courses";
 import { getUser } from "@/lib/auth";
 
 function capitalize(str) {
@@ -12,16 +13,31 @@ function capitalize(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-function CourseColorPlaceholder({ id }) {
-  const colors = [
-    "bg-blue-100 text-blue-600",
-    "bg-violet-100 text-violet-600",
-    "bg-emerald-100 text-emerald-600",
-    "bg-amber-100 text-amber-600",
-    "bg-rose-100 text-rose-600",
-  ];
+const placeholderColors = [
+  "bg-blue-100 text-blue-600",
+  "bg-violet-100 text-violet-600",
+  "bg-emerald-100 text-emerald-600",
+  "bg-amber-100 text-amber-600",
+  "bg-rose-100 text-rose-600",
+];
+
+function CourseThumbnail({ courseId, hasThumbnail, id }) {
+  const [src, setSrc] = useState(null);
+
+  useEffect(() => {
+    if (!hasThumbnail) return;
+    let objectUrl;
+    fetchThumbnailUrl(courseId)
+      .then((url) => { objectUrl = url; setSrc(url); })
+      .catch(() => setSrc(null));
+    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [courseId, hasThumbnail]);
+
+  if (src) {
+    return <img src={src} alt="" className="w-full h-36 rounded-t-xl object-cover" />;
+  }
   return (
-    <div className={`w-full h-36 rounded-t-xl flex items-center justify-center ${colors[id % colors.length]}`}>
+    <div className={`w-full h-36 rounded-t-xl flex items-center justify-center ${placeholderColors[id % placeholderColors.length]}`}>
       <BookOpen className="w-10 h-10 opacity-60" />
     </div>
   );
@@ -180,7 +196,11 @@ export default function InstructorDashboard() {
                   key={course.id}
                   className="bg-white rounded-xl border border-border hover:shadow-md transition-shadow flex flex-col"
                 >
-                  <CourseColorPlaceholder id={course.id} />
+                  <CourseThumbnail
+                    courseId={course.id}
+                    hasThumbnail={!!course.thumbnail_url}
+                    id={course.id}
+                  />
 
                   <div className="p-4 flex flex-col flex-1">
                     <div className="flex items-start justify-between gap-2 mb-1">
