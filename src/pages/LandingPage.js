@@ -7,6 +7,7 @@ import {
   BookOpen,
   Award,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import Navbar from "@/components/Navbar";
 
@@ -62,6 +63,8 @@ const steps = [
 ];
 
 export default function LandingPage() {
+  const navigate = useNavigate();
+
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
@@ -86,12 +89,14 @@ export default function LandingPage() {
             <Button
               size="lg"
               className="bg-white text-primary hover:bg-gray-100 font-semibold shadow-md"
+              onClick={() => navigate("/register")}
             >
               Get Started — it's free
             </Button>
             <Button
               size="lg"
               className="bg-transparent border-2 border-white text-white hover:bg-white/10"
+              onClick={() => navigate("/login")}
             >
               Log In
             </Button>
