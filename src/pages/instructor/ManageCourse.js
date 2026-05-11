@@ -1,0 +1,796 @@
+import { useEffect, useState, useRef } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import {
+  ChevronDown, ChevronRight, Pencil, Trash2, Plus, X,
+  Check, FileText, Video, HelpCircle, Upload, ImagePlus, Sparkles,
+} from "lucide-react";
+import InstructorLayout from "@/components/InstructorLayout";
+import { Button } from "@/components/ui/button";
+import {
+  getCourse, updateCourse, deleteCourse, publishCourse, unpublishCourse,
+  uploadThumbnail, deleteCourseThumbnail,
+  getModules, createModule, updateModule, deleteModule,
+  getLessons, createLesson, updateLesson, deleteLesson,
+  uploadLessonFile, deleteLessonFile,
+} from "@/api/instructor";
+import { fetchThumbnailUrl } from "@/api/courses";
+import { cn } from "@/lib/utils";
+
+function capitalize(str) {
+  if (!str) return "";
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+const TYPE_STYLE = {
+  pdf:   { icon: FileText,    cls: "text-rose-600 bg-rose-50 border-rose-200" },
+  video: { icon: Video,       cls: "text-blue-600 bg-blue-50 border-blue-200" },
+  quiz:  { icon: HelpCircle,  cls: "text-amber-600 bg-amber-50 border-amber-200" },
+};
+
+export default function ManageCourse() {
+  const { courseId } = useParams();
+  const navigate = useNavigate();
+
+  // ── Course ────────────────────────────────────────────────────────────
+  const [course, setCourse] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [pageError, setPageError] = useState("");
+
+  // ── Thumbnail ─────────────────────────────────────────────────────────
+  const [thumbnailSrc, setThumbnailSrc] = useState(null);
+  const [thumbnailBusy, setThumbnailBusy] = useState(false);
+  const thumbnailInputRef = useRef();
+
+  // ── Inline edit (course fields) ───────────────────────────────────────
+  const [editField, setEditField] = useState(null); // "title" | "description" | "skills"
+  const [editTitle, setEditTitle] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editSkills, setEditSkills] = useState([]);
+  const editSkillInputRef = useRef();
+  const [fieldSaving, setFieldSaving] = useState(false);
+
+  // ── Publish / Delete ──────────────────────────────────────────────────
+  const [publishing, setPublishing] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  // ── Modules ───────────────────────────────────────────────────────────
+  const [modules, setModules] = useState([]); // [{...mod, lessons:[], expanded:false}]
+  const [modulesLoading, setModulesLoading] = useState(true);
+
+  const [editingModuleId, setEditingModuleId] = useState(null);
+  const [editModuleTitle, setEditModuleTitle] = useState("");
+
+  const [addingModule, setAddingModule] = useState(false);
+  const [newModuleTitle, setNewModuleTitle] = useState("");
+
+  const [addingLessonInModule, setAddingLessonInModule] = useState(null);
+  const [newLessonTitle, setNewLessonTitle] = useState("");
+  const [newLessonType, setNewLessonType] = useState("video");
+
+  const [editingLessonId, setEditingLessonId] = useState(null);
+  const [editLessonTitle, setEditLessonTitle] = useState("");
+
+  const lessonFileRefs = useRef({});
+
+  // ── Load course ───────────────────────────────────────────────────────
+  useEffect(() => {
+    async function load() {
+      try {
+        const data = await getCourse(Number(courseId));
+        setCourse(data);
+        if (data.thumbnail_url) {
+          fetchThumbnailUrl(data.id).then(setThumbnailSrc).catch(() => {});
+        }
+      } catch (err) {
+        setPageError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, [courseId]);
+
+  // ── Load modules + lessons ────────────────────────────────────────────
+  useEffect(() => {
+    async function load() {
+      try {
+        const mods = await getModules(Number(courseId));
+        const sorted = [...mods].sort((a, b) => a.order_index - b.order_index);
+        const withLessons = await Promise.all(
+          sorted.map(async (m) => {
+            const lessons = await getLessons(m.id).catch(() => []);
+            return { ...m, lessons: [...lessons].sort((a, b) => a.order_index - b.order_index), expanded: false };
+          })
+        );
+        setModules(withLessons);
+      } catch {
+        // non-fatal
+      } finally {
+        setModulesLoading(false);
+      }
+    }
+    load();
+  }, [courseId]);
+
+  // ── Course info: inline edit ──────────────────────────────────────────
+  function startEdit(field) {
+    setEditField(field);
+    if (field === "title") setEditTitle(course.title);
+    if (field === "description") setEditDescription(course.description);
+    if (field === "skills") { setEditSkills(course.skills ?? []); }
+  }
+
+  async function saveField(field) {
+    setFieldSaving(true);
+    try {
+      const payload =
+        field === "title"       ? { title: editTitle.trim().toLowerCase() }
+        : field === "description" ? { description: editDescription.trim().toLowerCase() }
+        : { skills: editSkills };
+      const updated = await updateCourse(course.id, payload);
+      setCourse(updated);
+      setEditField(null);
+    } catch {
+      // keep edit open
+    } finally {
+      setFieldSaving(false);
+    }
+  }
+
+  function addEditSkill() {
+    const val = editSkillInputRef.current?.value.trim().toLowerCase() ?? "";
+    if (!val || editSkills.includes(val)) return;
+    setEditSkills((prev) => [...prev, val]);
+    editSkillInputRef.current.value = "";
+  }
+
+  // ── Thumbnail ─────────────────────────────────────────────────────────
+  async function handleThumbnailChange(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    setThumbnailBusy(true);
+    try {
+      await uploadThumbnail(course.id, file);
+      const url = URL.createObjectURL(file);
+      if (thumbnailSrc) URL.revokeObjectURL(thumbnailSrc);
+      setThumbnailSrc(url);
+      setCourse((c) => ({ ...c, thumbnail_url: "set" }));
+    } catch {
+    } finally {
+      setThumbnailBusy(false);
+      thumbnailInputRef.current.value = "";
+    }
+  }
+
+  async function handleRemoveThumbnail() {
+    setThumbnailBusy(true);
+    try {
+      await deleteCourseThumbnail(course.id);
+      if (thumbnailSrc) URL.revokeObjectURL(thumbnailSrc);
+      setThumbnailSrc(null);
+      setCourse((c) => ({ ...c, thumbnail_url: null }));
+    } catch {
+    } finally {
+      setThumbnailBusy(false);
+    }
+  }
+
+  // ── Publish / Delete ──────────────────────────────────────────────────
+  async function handlePublishToggle() {
+    setPublishing(true);
+    try {
+      if (course.published) {
+        await unpublishCourse(course.id);
+        setCourse((c) => ({ ...c, published: false }));
+      } else {
+        await publishCourse(course.id);
+        setCourse((c) => ({ ...c, published: true }));
+      }
+    } catch {
+    } finally {
+      setPublishing(false);
+    }
+  }
+
+  async function handleDeleteCourse() {
+    setDeleting(true);
+    try {
+      await deleteCourse(course.id);
+      navigate("/instructor/courses");
+    } catch {
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
+  }
+
+  // ── Modules ───────────────────────────────────────────────────────────
+  function toggleModule(id) {
+    setModules((ms) => ms.map((m) => m.id === id ? { ...m, expanded: !m.expanded } : m));
+  }
+
+  async function handleAddModule() {
+    const title = newModuleTitle.trim().toLowerCase();
+    if (!title) return;
+    try {
+      const mod = await createModule(Number(courseId), { title });
+      setModules((ms) => [...ms, { ...mod, lessons: [], expanded: false }]);
+      setNewModuleTitle("");
+      setAddingModule(false);
+    } catch {}
+  }
+
+  async function handleSaveModuleTitle(moduleId) {
+    const title = editModuleTitle.trim().toLowerCase();
+    if (!title) return;
+    try {
+      const updated = await updateModule(moduleId, { title });
+      setModules((ms) => ms.map((m) => m.id === moduleId ? { ...m, title: updated.title } : m));
+      setEditingModuleId(null);
+    } catch {}
+  }
+
+  async function handleDeleteModule(moduleId) {
+    try {
+      await deleteModule(moduleId);
+      setModules((ms) => ms.filter((m) => m.id !== moduleId));
+    } catch {}
+  }
+
+  // ── Lessons ───────────────────────────────────────────────────────────
+  async function handleAddLesson(moduleId) {
+    const title = newLessonTitle.trim().toLowerCase();
+    if (!title) return;
+    try {
+      const lesson = await createLesson(moduleId, { title, content_type: newLessonType });
+      setModules((ms) => ms.map((m) =>
+        m.id === moduleId ? { ...m, lessons: [...m.lessons, lesson] } : m
+      ));
+      setNewLessonTitle("");
+      setNewLessonType("video");
+      setAddingLessonInModule(null);
+    } catch {}
+  }
+
+  async function handleSaveLessonTitle(moduleId, lessonId) {
+    const title = editLessonTitle.trim().toLowerCase();
+    if (!title) return;
+    try {
+      const updated = await updateLesson(lessonId, { title });
+      setModules((ms) => ms.map((m) =>
+        m.id === moduleId
+          ? { ...m, lessons: m.lessons.map((l) => l.id === lessonId ? { ...l, title: updated.title } : l) }
+          : m
+      ));
+      setEditingLessonId(null);
+    } catch {}
+  }
+
+  async function handleDeleteLesson(moduleId, lessonId) {
+    try {
+      await deleteLesson(lessonId);
+      setModules((ms) => ms.map((m) =>
+        m.id === moduleId ? { ...m, lessons: m.lessons.filter((l) => l.id !== lessonId) } : m
+      ));
+    } catch {}
+  }
+
+  async function handleUploadLessonFile(moduleId, lessonId, file) {
+    try {
+      await uploadLessonFile(lessonId, file);
+      setModules((ms) => ms.map((m) =>
+        m.id === moduleId
+          ? { ...m, lessons: m.lessons.map((l) => l.id === lessonId ? { ...l, file_url: "set" } : l) }
+          : m
+      ));
+    } catch {}
+  }
+
+  async function handleDeleteLessonFile(moduleId, lessonId) {
+    try {
+      await deleteLessonFile(lessonId);
+      setModules((ms) => ms.map((m) =>
+        m.id === moduleId
+          ? { ...m, lessons: m.lessons.map((l) => l.id === lessonId ? { ...l, file_url: null } : l) }
+          : m
+      ));
+    } catch {}
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <InstructorLayout>
+        <div className="p-8 max-w-4xl mx-auto space-y-4">
+          <div className="h-5 w-24 bg-secondary rounded animate-pulse" />
+          <div className="bg-white rounded-xl border border-border overflow-hidden animate-pulse">
+            <div className="h-52 bg-secondary" />
+            <div className="p-6 space-y-4">
+              <div className="h-6 w-1/3 bg-secondary rounded" />
+              <div className="h-4 w-2/3 bg-secondary rounded" />
+              <div className="h-4 w-1/4 bg-secondary rounded" />
+            </div>
+          </div>
+        </div>
+      </InstructorLayout>
+    );
+  }
+
+  if (pageError) {
+    return (
+      <InstructorLayout>
+        <div className="p-8 text-center">
+          <p className="text-destructive text-sm">{pageError}</p>
+        </div>
+      </InstructorLayout>
+    );
+  }
+
+  const totalLessons = modules.reduce((s, m) => s + m.lessons.length, 0);
+
+  return (
+    <InstructorLayout>
+      <div className="p-8 max-w-4xl mx-auto space-y-6">
+
+        {/* Back */}
+        <button
+          onClick={() => navigate("/instructor/courses")}
+          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          ← My Courses
+        </button>
+
+        {/* ── Course Info ───────────────────────────────────────────────── */}
+        <div className="bg-white rounded-xl border border-border overflow-hidden">
+          {/* Thumbnail */}
+          <input ref={thumbnailInputRef} type="file" accept="image/*" className="hidden" onChange={handleThumbnailChange} />
+          <div className="relative w-full h-52 bg-secondary">
+            {thumbnailBusy && (
+              <div className="absolute inset-0 bg-white/60 flex items-center justify-center z-10">
+                <span className="text-sm text-muted-foreground">Saving...</span>
+              </div>
+            )}
+            {thumbnailSrc ? (
+              <>
+                <img src={thumbnailSrc} alt="" className="w-full h-full object-cover" />
+                <div className="absolute inset-0 bg-black/0 hover:bg-black/35 transition-colors flex items-center justify-center gap-2 opacity-0 hover:opacity-100">
+                  <button onClick={() => thumbnailInputRef.current.click()} className="bg-white text-foreground text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-secondary transition-colors">Change</button>
+                  <button onClick={handleRemoveThumbnail} className="bg-white text-destructive text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-secondary transition-colors">Remove</button>
+                </div>
+              </>
+            ) : (
+              <button
+                onClick={() => thumbnailInputRef.current.click()}
+                className="w-full h-full flex flex-col items-center justify-center gap-2 text-muted-foreground hover:text-primary hover:bg-primary/5 transition-colors"
+              >
+                <ImagePlus className="w-8 h-8" />
+                <span className="text-sm">Add thumbnail</span>
+              </button>
+            )}
+          </div>
+
+          <div className="p-6">
+            {/* Status + Actions */}
+            <div className="flex items-center justify-between mb-5">
+              <span className={cn(
+                "text-xs font-medium rounded-full px-2.5 py-0.5 border",
+                course.published
+                  ? "text-emerald-600 bg-emerald-50 border-emerald-200"
+                  : "text-muted-foreground bg-secondary border-border"
+              )}>
+                {course.published ? "Live" : "Draft"}
+              </span>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handlePublishToggle}
+                  disabled={publishing}
+                  className={course.published
+                    ? "border-destructive/40 text-destructive hover:bg-destructive hover:text-white"
+                    : "border-emerald-400 text-emerald-600 hover:bg-emerald-500 hover:text-white"
+                  }
+                >
+                  {publishing ? "..." : course.published ? "Unpublish" : "Publish"}
+                </Button>
+
+                {confirmDelete ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Are you sure?</span>
+                    <Button size="sm" variant="destructive" onClick={handleDeleteCourse} disabled={deleting}>
+                      {deleting ? "Deleting..." : "Yes, delete"}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setConfirmDelete(false)}>Cancel</Button>
+                  </div>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setConfirmDelete(true)}
+                    className="border-destructive/30 text-destructive hover:bg-destructive hover:text-white"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                    Delete
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Title */}
+            <div className="mb-4">
+              {editField === "title" ? (
+                <div className="space-y-2">
+                  <div className="flex justify-end">
+                    <span className={cn("text-xs", editTitle.length > 60 ? "text-destructive" : "text-muted-foreground")}>
+                      {editTitle.length}/60
+                    </span>
+                  </div>
+                  <input
+                    autoFocus
+                    type="text"
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    maxLength={60}
+                    className="w-full text-xl font-bold px-3 py-1.5 rounded-lg border border-primary bg-primary/5 focus:outline-none"
+                    onKeyDown={(e) => { if (e.key === "Enter") saveField("title"); if (e.key === "Escape") setEditField(null); }}
+                  />
+                  <div className="flex gap-2">
+                    <Button type="button" size="sm" onClick={() => saveField("title")} disabled={fieldSaving || !editTitle.trim()}>
+                      <Check className="w-3.5 h-3.5 mr-1" />Save
+                    </Button>
+                    <Button type="button" size="sm" variant="outline" onClick={() => setEditField(null)}>Cancel</Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="group flex items-start gap-2">
+                  <h1 className="text-xl font-bold text-foreground">{capitalize(course.title)}</h1>
+                  <button onClick={() => startEdit("title")} className="opacity-0 group-hover:opacity-100 transition-opacity mt-1 text-muted-foreground hover:text-primary">
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Description */}
+            <div className="mb-4">
+              {editField === "description" ? (
+                <div className="space-y-2">
+                  <div className="flex justify-end">
+                    <span className={cn("text-xs", editDescription.length > 250 ? "text-destructive" : "text-muted-foreground")}>
+                      {editDescription.length}/250
+                    </span>
+                  </div>
+                  <textarea
+                    autoFocus
+                    value={editDescription}
+                    onChange={(e) => setEditDescription(e.target.value)}
+                    maxLength={250}
+                    rows={3}
+                    className="w-full px-3 py-1.5 rounded-lg border border-primary bg-primary/5 focus:outline-none resize-none text-sm"
+                    onKeyDown={(e) => { if (e.key === "Escape") setEditField(null); }}
+                  />
+                  <div className="flex gap-2">
+                    <Button type="button" size="sm" onClick={() => saveField("description")} disabled={fieldSaving || !editDescription.trim()}>
+                      <Check className="w-3.5 h-3.5 mr-1" />Save
+                    </Button>
+                    <Button type="button" size="sm" variant="outline" onClick={() => setEditField(null)}>Cancel</Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="group flex items-start gap-2">
+                  <p className="text-sm text-muted-foreground">{capitalize(course.description)}</p>
+                  <button onClick={() => startEdit("description")} className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 text-muted-foreground hover:text-primary">
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Skills */}
+            <div>
+              {editField === "skills" ? (
+                <div className="space-y-3">
+                  <div className="flex gap-2">
+                    <input
+                      ref={editSkillInputRef}
+                      autoFocus
+                      type="text"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") { e.preventDefault(); addEditSkill(); }
+                        if (e.key === "Escape") setEditField(null);
+                      }}
+                      placeholder="Add a skill"
+                      className="flex-1 px-3 py-1.5 rounded-lg border border-border bg-secondary/30 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition"
+                    />
+                    <Button type="button" variant="outline" size="sm" onClick={addEditSkill}>Add</Button>
+                  </div>
+                  <div className="flex flex-wrap gap-2 min-h-6">
+                    {editSkills.map((s) => (
+                      <span key={s} className="flex items-center gap-1 bg-primary/10 text-primary text-xs font-medium px-2.5 py-1 rounded-full">
+                        {s}
+                        <button onClick={() => setEditSkills(editSkills.filter((x) => x !== s))}><X className="w-3 h-3" /></button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button type="button" size="sm" onClick={() => saveField("skills")} disabled={fieldSaving}>
+                      <Check className="w-3.5 h-3.5 mr-1" />Save
+                    </Button>
+                    <Button type="button" size="sm" variant="outline" onClick={() => setEditField(null)}>Cancel</Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="group flex items-start gap-2">
+                  <div className="flex flex-wrap gap-1.5">
+                    {(course.skills ?? []).length > 0
+                      ? course.skills.map((s) => (
+                          <span key={s} className="bg-secondary text-foreground text-xs font-medium px-2.5 py-0.5 rounded-full border border-border">{s}</span>
+                        ))
+                      : <span className="text-xs text-muted-foreground">No skills added</span>
+                    }
+                  </div>
+                  <button onClick={() => startEdit("skills")} className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 text-muted-foreground hover:text-primary">
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* ── Course Content ────────────────────────────────────────────── */}
+        <div className="bg-white rounded-xl border border-border overflow-hidden">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+            <h2 className="font-semibold text-foreground">Course Content</h2>
+            <span className="text-xs text-muted-foreground">
+              {modules.length} module{modules.length !== 1 ? "s" : ""} · {totalLessons} lesson{totalLessons !== 1 ? "s" : ""}
+            </span>
+          </div>
+
+          {modulesLoading ? (
+            <div className="p-6 space-y-3">
+              {[1, 2].map((i) => <div key={i} className="h-11 bg-secondary rounded-lg animate-pulse" />)}
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {modules.map((mod) => (
+                <div key={mod.id}>
+                  {/* Module row */}
+                  <div className="flex items-center gap-2 px-5 py-3 hover:bg-secondary/20 transition-colors">
+                    <button onClick={() => toggleModule(mod.id)} className="text-muted-foreground hover:text-foreground transition-colors shrink-0">
+                      {mod.expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                    </button>
+
+                    {editingModuleId === mod.id ? (
+                      <div className="flex items-center gap-2 flex-1">
+                        <input
+                          autoFocus
+                          type="text"
+                          value={editModuleTitle}
+                          onChange={(e) => setEditModuleTitle(e.target.value)}
+                          className="flex-1 px-2 py-1 text-sm rounded border border-primary bg-primary/5 focus:outline-none"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleSaveModuleTitle(mod.id);
+                            if (e.key === "Escape") setEditingModuleId(null);
+                          }}
+                        />
+                        <button onClick={() => handleSaveModuleTitle(mod.id)} className="text-primary hover:text-primary/70"><Check className="w-4 h-4" /></button>
+                        <button onClick={() => setEditingModuleId(null)} className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 flex-1 group/mod min-w-0">
+                        <span className="text-sm font-medium text-foreground truncate">{capitalize(mod.title)}</span>
+                        <span className="text-xs text-muted-foreground shrink-0">({mod.lessons.length})</span>
+                        <button
+                          onClick={() => { setEditingModuleId(mod.id); setEditModuleTitle(mod.title); }}
+                          className="opacity-0 group-hover/mod:opacity-100 transition-opacity text-muted-foreground hover:text-primary shrink-0"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Module actions */}
+                    <div className="flex items-center gap-1 ml-auto shrink-0">
+                      <button
+                        onClick={() => {
+                          if (addingLessonInModule === mod.id) {
+                            setAddingLessonInModule(null);
+                          } else {
+                            setAddingLessonInModule(mod.id);
+                            setNewLessonTitle("");
+                            setNewLessonType("video");
+                            setModules((ms) => ms.map((m) => m.id === mod.id ? { ...m, expanded: true } : m));
+                          }
+                        }}
+                        className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 px-2 py-1 rounded hover:bg-primary/5 transition-colors"
+                      >
+                        <Plus className="w-3.5 h-3.5" />Lesson
+                      </button>
+                      <button
+                        onClick={() => handleDeleteModule(mod.id)}
+                        className="text-muted-foreground hover:text-destructive p-1 rounded hover:bg-destructive/5 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Lessons (expanded) */}
+                  {mod.expanded && (
+                    <div className="bg-secondary/20 border-t border-border/60">
+                      {mod.lessons.length === 0 && addingLessonInModule !== mod.id && (
+                        <p className="text-xs text-muted-foreground px-14 py-3">No lessons yet.</p>
+                      )}
+
+                      {mod.lessons.map((lesson) => {
+                        const { icon: Icon, cls } = TYPE_STYLE[lesson.content_type] ?? TYPE_STYLE.pdf;
+                        return (
+                          <div key={lesson.id} className="flex items-center gap-3 px-14 py-2.5 border-b border-border/40 last:border-0 hover:bg-secondary/30 transition-colors group/lesson">
+                            {/* Type badge */}
+                            <span className={cn("flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded border shrink-0", cls)}>
+                              <Icon className="w-3 h-3" />{lesson.content_type}
+                            </span>
+
+                            {/* AI status badge */}
+                            {lesson.content_type !== "quiz" && (
+                              lesson.is_indexed ? (
+                                <span className="flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 border border-emerald-200 rounded px-2 py-0.5 shrink-0">
+                                  <Sparkles className="w-3 h-3" />AI Ready
+                                </span>
+                              ) : (
+                                <span className="flex items-center gap-1 text-xs font-medium text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-0.5 shrink-0">
+                                  <Sparkles className="w-3 h-3" />Not indexed
+                                </span>
+                              )
+                            )}
+
+                            {/* Title */}
+                            {editingLessonId === lesson.id ? (
+                              <div className="flex items-center gap-2 flex-1">
+                                <input
+                                  autoFocus
+                                  type="text"
+                                  value={editLessonTitle}
+                                  onChange={(e) => setEditLessonTitle(e.target.value)}
+                                  className="flex-1 px-2 py-0.5 text-sm rounded border border-primary bg-primary/5 focus:outline-none"
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") handleSaveLessonTitle(mod.id, lesson.id);
+                                    if (e.key === "Escape") setEditingLessonId(null);
+                                  }}
+                                />
+                                <button onClick={() => handleSaveLessonTitle(mod.id, lesson.id)} className="text-primary hover:text-primary/70"><Check className="w-4 h-4" /></button>
+                                <button onClick={() => setEditingLessonId(null)} className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1.5 flex-1 group/les min-w-0">
+                                <span className="text-sm text-foreground truncate">{capitalize(lesson.title)}</span>
+                                <button
+                                  onClick={() => { setEditingLessonId(lesson.id); setEditLessonTitle(lesson.title); }}
+                                  className="opacity-0 group-hover/les:opacity-100 transition-opacity text-muted-foreground hover:text-primary shrink-0"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            )}
+
+                            {/* File actions (not for quiz) */}
+                            {lesson.content_type !== "quiz" && (
+                              <>
+                                <input
+                                  ref={(el) => { if (el) lessonFileRefs.current[lesson.id] = el; }}
+                                  type="file"
+                                  accept={lesson.content_type === "pdf" ? ".pdf" : "video/*"}
+                                  className="hidden"
+                                  onChange={(e) => {
+                                    const file = e.target.files[0];
+                                    if (file) handleUploadLessonFile(mod.id, lesson.id, file);
+                                    e.target.value = "";
+                                  }}
+                                />
+                                <div className="opacity-0 group-hover/lesson:opacity-100 transition-opacity flex items-center gap-1 shrink-0">
+                                  {lesson.file_url ? (
+                                    <>
+                                      <button
+                                        onClick={() => lessonFileRefs.current[lesson.id]?.click()}
+                                        className="text-xs text-muted-foreground hover:text-primary px-2 py-0.5 rounded hover:bg-primary/5 transition-colors flex items-center gap-1"
+                                      >
+                                        <Upload className="w-3 h-3" />Replace
+                                      </button>
+                                      <button
+                                        onClick={() => handleDeleteLessonFile(mod.id, lesson.id)}
+                                        className="text-xs text-muted-foreground hover:text-destructive px-2 py-0.5 rounded hover:bg-destructive/5 transition-colors flex items-center gap-1"
+                                      >
+                                        <X className="w-3 h-3" />File
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <button
+                                      onClick={() => lessonFileRefs.current[lesson.id]?.click()}
+                                      className="text-xs text-amber-600 hover:text-amber-700 px-2 py-0.5 rounded border border-amber-200 hover:bg-amber-50 transition-colors flex items-center gap-1"
+                                    >
+                                      <Upload className="w-3 h-3" />Upload
+                                    </button>
+                                  )}
+                                </div>
+                              </>
+                            )}
+
+                            <button
+                              onClick={() => handleDeleteLesson(mod.id, lesson.id)}
+                              className="opacity-0 group-hover/lesson:opacity-100 transition-opacity text-muted-foreground hover:text-destructive p-1 rounded hover:bg-destructive/5 transition-colors shrink-0"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        );
+                      })}
+
+                      {/* Add lesson form */}
+                      {addingLessonInModule === mod.id && (
+                        <div className="flex items-center gap-2 px-14 py-3 border-t border-border/40">
+                          <select
+                            value={newLessonType}
+                            onChange={(e) => setNewLessonType(e.target.value)}
+                            className="text-sm px-2 py-1.5 rounded-lg border border-border bg-white focus:outline-none focus:border-primary"
+                          >
+                            <option value="video">Video</option>
+                            <option value="pdf">PDF</option>
+                            <option value="quiz">Quiz</option>
+                          </select>
+                          <input
+                            autoFocus
+                            type="text"
+                            value={newLessonTitle}
+                            onChange={(e) => setNewLessonTitle(e.target.value)}
+                            placeholder="Lesson title"
+                            className="flex-1 px-3 py-1.5 text-sm rounded-lg border border-border bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleAddLesson(mod.id);
+                              if (e.key === "Escape") setAddingLessonInModule(null);
+                            }}
+                          />
+                          <Button size="sm" onClick={() => handleAddLesson(mod.id)} disabled={!newLessonTitle.trim()}>Add</Button>
+                          <Button size="sm" variant="outline" onClick={() => setAddingLessonInModule(null)}>Cancel</Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {/* Add module */}
+              {addingModule ? (
+                <div className="flex items-center gap-2 px-5 py-3">
+                  <input
+                    autoFocus
+                    type="text"
+                    value={newModuleTitle}
+                    onChange={(e) => setNewModuleTitle(e.target.value)}
+                    placeholder="Module title"
+                    className="flex-1 px-3 py-1.5 text-sm rounded-lg border border-border bg-secondary/30 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleAddModule();
+                      if (e.key === "Escape") { setAddingModule(false); setNewModuleTitle(""); }
+                    }}
+                  />
+                  <Button size="sm" onClick={handleAddModule} disabled={!newModuleTitle.trim()}>Add Module</Button>
+                  <Button size="sm" variant="outline" onClick={() => { setAddingModule(false); setNewModuleTitle(""); }}>Cancel</Button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setAddingModule(true)}
+                  className="w-full flex items-center gap-2 px-5 py-3 text-sm text-muted-foreground hover:text-primary hover:bg-primary/5 transition-colors"
+                >
+                  <Plus className="w-4 h-4" />Add Module
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+      </div>
+    </InstructorLayout>
+  );
+}
