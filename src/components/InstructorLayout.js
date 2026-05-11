@@ -1,11 +1,12 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { LayoutDashboard, BookOpen, LogOut, GraduationCap } from "lucide-react";
+import { LayoutDashboard, BookOpen, LogOut, GraduationCap, UserCircle } from "lucide-react";
 import { removeToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { to: "/instructor/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { to: "/instructor/courses", icon: BookOpen, label: "My Courses" },
+  { to: "/instructor/dashboard", icon: LayoutDashboard, label: "Dashboard"  },
+  { to: "/instructor/courses",   icon: BookOpen,        label: "My Courses" },
+  { to: "/profile",              icon: UserCircle,      label: "My Profile" },
 ];
 
 export default function InstructorLayout({ children }) {

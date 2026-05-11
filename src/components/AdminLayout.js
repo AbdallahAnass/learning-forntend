@@ -1,12 +1,13 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { BarChart3, BookOpen, GraduationCap, LogOut, Users } from "lucide-react";
+import { BarChart3, BookOpen, GraduationCap, LogOut, UserCircle, Users } from "lucide-react";
 import { removeToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { to: "/admin/dashboard", icon: BarChart3, label: "Dashboard" },
-  { to: "/admin/users",     icon: Users,     label: "Users"     },
-  { to: "/admin/courses",   icon: BookOpen,  label: "Courses"   },
+  { to: "/admin/dashboard", icon: BarChart3,   label: "Dashboard"  },
+  { to: "/admin/users",     icon: Users,       label: "Users"      },
+  { to: "/admin/courses",   icon: BookOpen,    label: "Courses"    },
+  { to: "/profile",         icon: UserCircle,  label: "My Profile" },
 ];
 
 export default function AdminLayout({ children }) {

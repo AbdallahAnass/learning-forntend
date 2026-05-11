@@ -15,6 +15,7 @@ import StudentWellnessChat from "@/pages/student/WellnessChat";
 import AdminDashboard from "@/pages/admin/Dashboard";
 import AdminUsers from "@/pages/admin/Users";
 import AdminCourses from "@/pages/admin/Courses";
+import ProfilePage from "@/pages/ProfilePage";
 import ProtectedRoute from "@/components/ProtectedRoute";
 
 function App() {
@@ -125,6 +126,14 @@ function App() {
           element={
             <ProtectedRoute role="administrator">
               <AdminCourses />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <ProfilePage />
             </ProtectedRoute>
           }
         />
