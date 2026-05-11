@@ -9,7 +9,7 @@ import {
   getCourse, getCourseModules, getModuleLessons,
   getCourseReviews, fetchThumbnailUrl,
 } from "@/api/courses";
-import { getEnrollmentStatus, enrollInCourse } from "@/api/enrollment";
+import { getEnrollmentStatus, enrollInCourse, unenrollFromCourse } from "@/api/enrollment";
 import { submitReview, updateReview, deleteReview, getMyReview } from "@/api/reviews";
 
 function StarRating({ value, size = "sm" }) {
@@ -210,6 +210,7 @@ export default function CourseDetail() {
   const [loading, setLoading] = useState(true);
   const [enrolling, setEnrolling] = useState(false);
   const [enrollError, setEnrollError] = useState("");
+  const [unenrolling, setUnenrolling] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -227,6 +228,19 @@ export default function CourseDetail() {
     getEnrollmentStatus(courseId).then(setEnrollStatus).catch(() => {});
     getMyReview(courseId).then((r) => setMyReview(r ?? null)).catch(() => setMyReview(null));
   }, [courseId]);
+
+  async function handleUnenroll() {
+    setUnenrolling(true);
+    try {
+      await unenrollFromCourse(courseId);
+      setEnrollStatus("unenrolled");
+      setMyReview(null);
+    } catch (err) {
+      setEnrollError(err.message);
+    } finally {
+      setUnenrolling(false);
+    }
+  }
 
   function handleReviewSaved(saved) {
     setMyReview(saved);
@@ -408,6 +422,15 @@ export default function CourseDetail() {
                 >
                   Continue Learning
                 </button>
+                {enrollStatus !== "completed" && (
+                  <button
+                    onClick={handleUnenroll}
+                    disabled={unenrolling}
+                    className="w-full py-2 rounded-lg text-sm text-destructive hover:bg-destructive/10 disabled:opacity-60 transition-colors"
+                  >
+                    {unenrolling ? "Unenrolling…" : "Unenroll"}
+                  </button>
+                )}
               </>
             ) : (
               <>

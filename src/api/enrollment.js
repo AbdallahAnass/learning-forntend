@@ -23,3 +23,7 @@ export function markLessonComplete(lessonId) {
 export function getCompletedLessons(courseId) {
   return apiFetch(`/enrollment/completed-lessons/${courseId}`);
 }
+
+export function unenrollFromCourse(courseId) {
+  return apiFetch(`/enrollment/${courseId}`, { method: "DELETE" });
+}
