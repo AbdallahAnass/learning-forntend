@@ -33,6 +33,13 @@ export function getCourseReviews(courseId) {
   return apiFetch(`/courses/${courseId}/reviews`);
 }
 
+export function askCourse(courseId, question) {
+  return apiFetch(`/courses/${courseId}/ask`, {
+    method: "POST",
+    body: JSON.stringify({ question }),
+  });
+}
+
 export async function getLessonFileUrl(lessonId) {
   const token = (await import("@/lib/auth")).getToken();
   const res = await fetch(`${BASE_URL}/courses/lessons/${lessonId}/file`, {

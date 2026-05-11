@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
-  ArrowLeft, ArrowRight, CheckCircle, ChevronDown, ChevronRight,
-  FileText, Loader2, PlayCircle, Trophy,
+  ArrowLeft, ArrowRight, Bot, CheckCircle, ChevronDown, ChevronRight,
+  FileText, Loader2, PlayCircle, Send, Trophy, X,
 } from "lucide-react";
-import { getCourse, getCourseModules, getModuleLessons, getLessonFileUrl } from "@/api/courses";
+import { getCourse, getCourseModules, getModuleLessons, getLessonFileUrl, askCourse } from "@/api/courses";
 import { getQuiz, submitQuiz, getQuizResult, fetchQuestionImageBlob, fetchAnswerImageBlob } from "@/api/quiz";
 import { markLessonComplete, getCompletedLessons } from "@/api/enrollment";
 
@@ -309,6 +309,135 @@ function FileViewer({ lesson, alreadyCompleted, onComplete }) {
   );
 }
 
+// ─── Message renderer (bold markdown) ────────────────────────────────────────
+
+function MessageText({ text }) {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.startsWith("**") && part.endsWith("**")
+          ? <strong key={i}>{part.slice(2, -2)}</strong>
+          : <span key={i}>{part}</span>
+      )}
+    </>
+  );
+}
+
+// ─── AI Chat ─────────────────────────────────────────────────────────────────
+
+function AiChat({ courseId, onClose }) {
+  const [messages, setMessages] = useState([
+    { role: "ai", text: "Hi! Ask me anything about this course." },
+  ]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const bottomRef = useRef(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  async function handleSend() {
+    const q = input.trim();
+    if (!q || loading) return;
+    setInput("");
+    setMessages((prev) => [...prev, { role: "user", text: q }]);
+    setLoading(true);
+    try {
+      const { answer } = await askCourse(courseId, q);
+      setMessages((prev) => [...prev, { role: "ai", text: answer }]);
+    } catch (err) {
+      setMessages((prev) => [...prev, { role: "ai", text: `Error: ${err.message}` }]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleKey(e) {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
+  }
+
+  return (
+    <div className="flex flex-col h-full bg-secondary/30">
+      {/* Header */}
+      <div className="shrink-0 flex items-center justify-between px-6 py-4 bg-white border-b border-border">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+            <Bot className="w-4 h-4 text-primary" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-foreground">Course Assistant</p>
+            <p className="text-xs text-muted-foreground">Ask anything about this course</p>
+          </div>
+        </div>
+        <button
+          onClick={onClose}
+          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back to lesson
+        </button>
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4">
+        {messages.map((msg, i) => (
+          <div key={i} className={`flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+            {msg.role === "ai" && (
+              <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                <Bot className="w-3.5 h-3.5 text-primary" />
+              </div>
+            )}
+            <div className={`max-w-[75%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${
+              msg.role === "user"
+                ? "bg-primary text-primary-foreground rounded-br-sm"
+                : "bg-white border border-border text-foreground rounded-bl-sm shadow-sm"
+            }`}>
+              <MessageText text={msg.text} />
+            </div>
+          </div>
+        ))}
+        {loading && (
+          <div className="flex gap-3 justify-start">
+            <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+              <Bot className="w-3.5 h-3.5 text-primary" />
+            </div>
+            <div className="bg-white border border-border px-4 py-3 rounded-2xl rounded-bl-sm shadow-sm flex gap-1.5 items-center">
+              <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce [animation-delay:0ms]" />
+              <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce [animation-delay:150ms]" />
+              <span className="w-2 h-2 bg-muted-foreground/50 rounded-full animate-bounce [animation-delay:300ms]" />
+            </div>
+          </div>
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Input */}
+      <div className="shrink-0 bg-white border-t border-border px-6 py-4">
+        <div className="flex gap-3 items-end bg-secondary rounded-xl px-4 py-3">
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKey}
+            placeholder="Ask a question about this course…"
+            rows={1}
+            className="flex-1 resize-none text-sm bg-transparent outline-none max-h-32 leading-snug"
+          />
+          <button
+            onClick={handleSend}
+            disabled={!input.trim() || loading}
+            className="p-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 transition-colors shrink-0"
+          >
+            <Send className="w-4 h-4" />
+          </button>
+        </div>
+        <p className="text-xs text-muted-foreground mt-2 text-center">Enter to send · Shift+Enter for new line</p>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main page ───────────────────────────────────────────────────────────────
 
 export default function LessonViewer() {
@@ -320,6 +449,7 @@ export default function LessonViewer() {
   const [allLessons, setAllLessons] = useState([]);
   const [currentLesson, setCurrentLesson] = useState(null);
   const [completedIds, setCompletedIds] = useState(new Set());
+  const [chatOpen, setChatOpen] = useState(false);
 
   useEffect(() => {
     getCourse(courseId).then(setCourse).catch(() => {});
@@ -379,49 +509,60 @@ export default function LessonViewer() {
 
       {/* Content */}
       <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
-        {!currentLesson ? (
-          <div className="flex items-center justify-center h-full">
-            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-          </div>
-        ) : currentLesson.content_type === "quiz" ? (
-          <div className="flex-1 overflow-y-auto">
-            <QuizViewer lessonId={currentLesson.id} onComplete={() => handleComplete(currentLesson.id)} />
-          </div>
+        {chatOpen ? (
+          <AiChat courseId={courseId} onClose={() => setChatOpen(false)} />
         ) : (
-          <FileViewer
-            lesson={currentLesson}
-            alreadyCompleted={completedIds.has(currentLesson.id)}
-            onComplete={() => handleComplete(currentLesson.id)}
-          />
-        )}
+          <>
+            {!currentLesson ? (
+              <div className="flex items-center justify-center flex-1">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : currentLesson.content_type === "quiz" ? (
+              <div className="flex-1 overflow-y-auto">
+                <QuizViewer lessonId={currentLesson.id} onComplete={() => handleComplete(currentLesson.id)} />
+              </div>
+            ) : (
+              <FileViewer
+                lesson={currentLesson}
+                alreadyCompleted={completedIds.has(currentLesson.id)}
+                onComplete={() => handleComplete(currentLesson.id)}
+              />
+            )}
 
-        {/* Prev / Next bar */}
-        {currentLesson && (
-          <div className="shrink-0 border-t border-border bg-white px-6 py-3 flex items-center justify-between gap-4">
-            <button
-              onClick={() => prevLesson && setCurrentLesson(prevLesson)}
-              disabled={!prevLesson}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-border hover:bg-secondary transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span className="hidden sm:inline capitalize">{prevLesson?.title ?? "Previous"}</span>
-              <span className="sm:hidden">Previous</span>
-            </button>
+            {/* Prev / Next bar */}
+            {currentLesson && (
+              <div className="shrink-0 border-t border-border bg-white px-4 py-3 flex items-center justify-between gap-3">
+                <button
+                  onClick={() => prevLesson && setCurrentLesson(prevLesson)}
+                  disabled={!prevLesson}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border border-border hover:bg-secondary transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span className="hidden sm:inline capitalize line-clamp-1 max-w-32">{prevLesson?.title ?? "Previous"}</span>
+                </button>
 
-            <span className="text-xs text-muted-foreground">
-              {currentIndex + 1} / {allLessons.length}
-            </span>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-muted-foreground">{currentIndex + 1} / {allLessons.length}</span>
+                  <button
+                    onClick={() => setChatOpen(true)}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                  >
+                    <Bot className="w-4 h-4" />
+                    <span className="hidden sm:inline">Ask AI</span>
+                  </button>
+                </div>
 
-            <button
-              onClick={() => nextLesson && setCurrentLesson(nextLesson)}
-              disabled={!nextLesson}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-border hover:bg-secondary transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <span className="hidden sm:inline capitalize">{nextLesson?.title ?? "Next"}</span>
-              <span className="sm:hidden">Next</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
+                <button
+                  onClick={() => nextLesson && setCurrentLesson(nextLesson)}
+                  disabled={!nextLesson}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border border-border hover:bg-secondary transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  <span className="hidden sm:inline capitalize line-clamp-1 max-w-32">{nextLesson?.title ?? "Next"}</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </>
         )}
       </main>
     </div>

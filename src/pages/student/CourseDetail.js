@@ -266,7 +266,7 @@ export default function CourseDetail() {
           <div className="sticky top-24 bg-white rounded-xl border border-border shadow-sm p-5 space-y-4">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Users className="w-4 h-4" />
-              <span>{totalReviews > 0 ? `${totalReviews} students reviewed` : "Be the first to enroll!"}</span>
+              <span>{totalReviews > 0 ? `${totalReviews} student reviews` : isEnrolled ? "You're enrolled" : "No reviews yet"}</span>
             </div>
 
             {enrollStatus === null ? (
