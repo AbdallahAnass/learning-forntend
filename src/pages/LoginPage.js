@@ -7,7 +7,7 @@ import { saveToken, getUser } from "@/lib/auth";
 function redirectByRole(role, navigate) {
   if (role === "instructor") return navigate("/instructor/dashboard");
   if (role === "administrator") return navigate("/admin/dashboard");
-  navigate("/dashboard");
+  navigate("/my-learning");
 }
 
 export default function LoginPage() {

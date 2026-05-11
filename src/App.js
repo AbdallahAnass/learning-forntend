@@ -7,6 +7,8 @@ import InstructorMyCourses from "@/pages/instructor/MyCourses";
 import InstructorCreateCourse from "@/pages/instructor/CreateCourse";
 import InstructorManageCourse from "@/pages/instructor/ManageCourse";
 import InstructorQuizBuilder from "@/pages/instructor/QuizBuilder";
+import StudentCourseCatalog from "@/pages/student/CourseCatalog";
+import StudentCourseDetail from "@/pages/student/CourseDetail";
 import ProtectedRoute from "@/components/ProtectedRoute";
 
 function App() {
@@ -53,6 +55,22 @@ function App() {
           element={
             <ProtectedRoute role="instructor">
               <InstructorQuizBuilder />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/courses"
+          element={
+            <ProtectedRoute role="student">
+              <StudentCourseCatalog />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/courses/:courseId"
+          element={
+            <ProtectedRoute role="student">
+              <StudentCourseDetail />
             </ProtectedRoute>
           }
         />
