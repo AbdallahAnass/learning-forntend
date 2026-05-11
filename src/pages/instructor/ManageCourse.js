@@ -55,6 +55,7 @@ export default function ManageCourse() {
 
   // ── Publish / Delete ──────────────────────────────────────────────────
   const [publishing, setPublishing] = useState(false);
+  const [publishError, setPublishError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -187,6 +188,7 @@ export default function ManageCourse() {
   // ── Publish / Delete ──────────────────────────────────────────────────
   async function handlePublishToggle() {
     setPublishing(true);
+    setPublishError("");
     try {
       if (course.published) {
         await unpublishCourse(course.id);
@@ -195,7 +197,8 @@ export default function ManageCourse() {
         await publishCourse(course.id);
         setCourse((c) => ({ ...c, published: true }));
       }
-    } catch {
+    } catch (err) {
+      if (!course.published) setPublishError(err.message);
     } finally {
       setPublishing(false);
     }
@@ -488,6 +491,23 @@ export default function ManageCourse() {
                 )}
               </div>
             </div>
+
+            {/* Publish requirements errors */}
+            {publishError && !course.published && (
+              <div className="mb-5 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200">
+                <p className="text-xs font-semibold text-amber-800 mb-2">
+                  Course can't be published yet:
+                </p>
+                <ul className="space-y-1">
+                  {publishError.split("\n").map((issue, i) => (
+                    <li key={i} className="flex items-start gap-2 text-xs text-amber-700">
+                      <span className="mt-0.5 shrink-0">•</span>
+                      {issue}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {/* Title */}
             <div className="mb-4">

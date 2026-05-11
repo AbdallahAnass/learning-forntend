@@ -15,3 +15,7 @@ export function login({ email, password }) {
     body: body.toString(),
   });
 }
+
+export function logout() {
+  return apiFetch("/auth/logout", { method: "POST" });
+}

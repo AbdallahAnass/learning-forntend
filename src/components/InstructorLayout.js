@@ -1,6 +1,7 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { LayoutDashboard, BookOpen, LogOut, GraduationCap, UserCircle } from "lucide-react";
 import { removeToken } from "@/lib/auth";
+import { logout } from "@/api/auth";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -13,8 +14,10 @@ export default function InstructorLayout({ children }) {
   const navigate = useNavigate();
 
   function handleLogout() {
-    removeToken();
-    navigate("/login");
+    logout().catch(() => {}).finally(() => {
+      removeToken();
+      navigate("/login");
+    });
   }
 
   return (

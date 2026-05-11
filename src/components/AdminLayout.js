@@ -1,6 +1,7 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { BarChart3, BookOpen, GraduationCap, LogOut, UserCircle, Users } from "lucide-react";
 import { removeToken } from "@/lib/auth";
+import { logout } from "@/api/auth";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -14,8 +15,10 @@ export default function AdminLayout({ children }) {
   const navigate = useNavigate();
 
   function handleLogout() {
-    removeToken();
-    navigate("/login");
+    logout().catch(() => {}).finally(() => {
+      removeToken();
+      navigate("/login");
+    });
   }
 
   return (
