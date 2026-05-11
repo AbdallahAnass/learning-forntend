@@ -9,6 +9,8 @@ import InstructorManageCourse from "@/pages/instructor/ManageCourse";
 import InstructorQuizBuilder from "@/pages/instructor/QuizBuilder";
 import StudentCourseCatalog from "@/pages/student/CourseCatalog";
 import StudentCourseDetail from "@/pages/student/CourseDetail";
+import StudentMyLearning from "@/pages/student/MyLearning";
+import StudentLessonViewer from "@/pages/student/LessonViewer";
 import ProtectedRoute from "@/components/ProtectedRoute";
 
 function App() {
@@ -71,6 +73,22 @@ function App() {
           element={
             <ProtectedRoute role="student">
               <StudentCourseDetail />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/my-learning"
+          element={
+            <ProtectedRoute role="student">
+              <StudentMyLearning />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/courses/:courseId/learn"
+          element={
+            <ProtectedRoute role="student">
+              <StudentLessonViewer />
             </ProtectedRoute>
           }
         />

@@ -128,3 +128,14 @@ export function fetchAnswerImageBlob(answerId) {
 export function deleteAnswerImage(answerId) {
   return apiFetch(`/answers/${answerId}/image`, { method: "DELETE" });
 }
+
+export function submitQuiz(quizId, answers) {
+  return apiFetch(`/quizzes/${quizId}/submit`, {
+    method: "POST",
+    body: JSON.stringify({ answers }),
+  });
+}
+
+export function getQuizResult(quizId) {
+  return apiFetch(`/quizzes/${quizId}/result`);
+}

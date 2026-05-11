@@ -17,7 +17,11 @@ export async function apiFetch(path, options = {}) {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: "Something went wrong." }));
-    throw new Error(err.detail || "Request failed.");
+    const detail = err.detail;
+    const message = Array.isArray(detail)
+      ? detail.map((d) => d.msg).join(", ")
+      : detail || "Request failed.";
+    throw new Error(message);
   }
 
   return res.json();

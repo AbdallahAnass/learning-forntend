@@ -33,6 +33,16 @@ export function getCourseReviews(courseId) {
   return apiFetch(`/courses/${courseId}/reviews`);
 }
 
+export async function getLessonFileUrl(lessonId) {
+  const token = (await import("@/lib/auth")).getToken();
+  const res = await fetch(`${BASE_URL}/courses/lessons/${lessonId}/file`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new Error("File not available.");
+  const blob = await res.blob();
+  return { url: URL.createObjectURL(blob), type: res.headers.get("content-type") || "" };
+}
+
 export async function fetchThumbnailUrl(courseId) {
   const token = getToken();
   const res = await fetch(`${BASE_URL}/courses/${courseId}/thumbnail`, {
