@@ -3,6 +3,7 @@ import LandingPage from "@/pages/LandingPage";
 import RegisterPage from "@/pages/RegisterPage";
 import LoginPage from "@/pages/LoginPage";
 import InstructorDashboard from "@/pages/instructor/Dashboard";
+import InstructorMyCourses from "@/pages/instructor/MyCourses";
 import ProtectedRoute from "@/components/ProtectedRoute";
 
 function App() {
@@ -17,6 +18,14 @@ function App() {
           element={
             <ProtectedRoute role="instructor">
               <InstructorDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/instructor/courses"
+          element={
+            <ProtectedRoute role="instructor">
+              <InstructorMyCourses />
             </ProtectedRoute>
           }
         />
