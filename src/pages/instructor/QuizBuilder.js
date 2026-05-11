@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Check, HelpCircle, ImagePlus, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Check, HelpCircle, ImagePlus, Pencil, Plus, Trash2, TrendingUp, X } from "lucide-react";
 import InstructorLayout from "@/components/InstructorLayout";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,11 +10,29 @@ import {
   addAnswer, updateAnswer, deleteAnswer,
   uploadAnswerImage, fetchAnswerImageBlob, deleteAnswerImage,
 } from "@/api/quiz";
+import { getQuizAnalytics } from "@/api/instructor";
 import { cn } from "@/lib/utils";
 
 function capitalize(str) {
   if (!str) return "";
   return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+function scoreColor(value) {
+  if (value >= 70) return "text-emerald-600 bg-emerald-50 border-emerald-200";
+  if (value >= 40) return "text-amber-600 bg-amber-50 border-amber-200";
+  return "text-rose-600 bg-rose-50 border-rose-200";
+}
+
+function StatChip({ label, value, color }) {
+  return (
+    <span className={cn(
+      "inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded border",
+      color ?? "text-muted-foreground bg-secondary border-border"
+    )}>
+      {label}: <span className="font-bold">{value}</span>
+    </span>
+  );
 }
 
 export default function QuizBuilder() {
@@ -43,6 +61,8 @@ export default function QuizBuilder() {
   const [editingAnswerId, setEditingAnswerId] = useState(null);
   const [editAnswerText, setEditAnswerText] = useState("");
 
+  const [quizAnalytics, setQuizAnalytics] = useState(null);
+
   const [questionImages, setQuestionImages] = useState({});
   const [answerImages, setAnswerImages] = useState({});
   const questionImageRefs = useRef({});
@@ -53,6 +73,7 @@ export default function QuizBuilder() {
       try {
         const data = await getQuiz(Number(lessonId));
         setQuiz(data);
+        getQuizAnalytics(data.id).then(setQuizAnalytics).catch(() => {});
       } catch {
         setNotFound(true);
       } finally {
@@ -364,6 +385,23 @@ export default function QuizBuilder() {
                   <p className="text-xs text-muted-foreground mt-1">
                     {quiz.questions.length} question{quiz.questions.length !== 1 ? "s" : ""}
                   </p>
+
+                  {quizAnalytics && (
+                    <div className="flex items-center gap-1.5 mt-3 flex-wrap">
+                      <TrendingUp className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                      <StatChip label="Attempts" value={quizAnalytics.total_attempts} />
+                      <StatChip
+                        label="Avg Score"
+                        value={`${quizAnalytics.average_score}%`}
+                        color={scoreColor(quizAnalytics.average_score)}
+                      />
+                      <StatChip
+                        label="Pass Rate"
+                        value={`${quizAnalytics.pass_rate}%`}
+                        color={scoreColor(quizAnalytics.pass_rate)}
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* Delete quiz */}

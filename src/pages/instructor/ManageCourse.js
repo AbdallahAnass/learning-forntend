@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   ChevronDown, ChevronRight, Pencil, Trash2, Plus, X,
   Check, FileText, Video, HelpCircle, Upload, ImagePlus, Sparkles,
+  ArrowUp, ArrowDown, Star, MessageSquare,
 } from "lucide-react";
 import InstructorLayout from "@/components/InstructorLayout";
 import { Button } from "@/components/ui/button";
@@ -12,8 +13,10 @@ import {
   getModules, createModule, updateModule, deleteModule,
   getLessons, createLesson, updateLesson, deleteLesson,
   uploadLessonFile, deleteLessonFile,
+  reorderModules, reorderLessons,
 } from "@/api/instructor";
 import { fetchThumbnailUrl } from "@/api/courses";
+import { getCourseReviews } from "@/api/reviews";
 import { getQuiz, deleteQuiz } from "@/api/quiz";
 import { cn } from "@/lib/utils";
 
@@ -74,6 +77,9 @@ export default function ManageCourse() {
 
   const lessonFileRefs = useRef({});
 
+  // ── Reviews ───────────────────────────────────────────────────────────
+  const [reviews, setReviews] = useState(null);
+
   // ── Load course ───────────────────────────────────────────────────────
   useEffect(() => {
     async function load() {
@@ -83,6 +89,7 @@ export default function ManageCourse() {
         if (data.thumbnail_url) {
           fetchThumbnailUrl(data.id).then(setThumbnailSrc).catch(() => {});
         }
+        getCourseReviews(data.id).then(setReviews).catch(() => {});
       } catch (err) {
         setPageError(err.message);
       } finally {
@@ -236,6 +243,56 @@ export default function ManageCourse() {
       await deleteModule(moduleId);
       setModules((ms) => ms.filter((m) => m.id !== moduleId));
     } catch {}
+  }
+
+  async function handleMoveModule(moduleId, direction) {
+    const idx = modules.findIndex((m) => m.id === moduleId);
+    const toIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (toIdx < 0 || toIdx >= modules.length) return;
+
+    const newOrder = modules.map((_, i) => {
+      if (i === idx) return toIdx + 1;
+      if (i === toIdx) return idx + 1;
+      return i + 1;
+    });
+
+    const prev = modules;
+    const reordered = [...modules];
+    [reordered[idx], reordered[toIdx]] = [reordered[toIdx], reordered[idx]];
+    setModules(reordered.map((m, i) => ({ ...m, order_index: i + 1 })));
+
+    try {
+      await reorderModules(Number(courseId), newOrder);
+    } catch {
+      setModules(prev);
+    }
+  }
+
+  async function handleMoveLesson(moduleId, lessonId, direction) {
+    const mod = modules.find((m) => m.id === moduleId);
+    if (!mod) return;
+    const lessons = mod.lessons;
+    const idx = lessons.findIndex((l) => l.id === lessonId);
+    const toIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (toIdx < 0 || toIdx >= lessons.length) return;
+
+    const newOrder = lessons.map((_, i) => {
+      if (i === idx) return toIdx + 1;
+      if (i === toIdx) return idx + 1;
+      return i + 1;
+    });
+
+    const prev = modules;
+    const reordered = [...lessons];
+    [reordered[idx], reordered[toIdx]] = [reordered[toIdx], reordered[idx]];
+    const updatedLessons = reordered.map((l, i) => ({ ...l, order_index: i + 1 }));
+    setModules((ms) => ms.map((m) => m.id === moduleId ? { ...m, lessons: updatedLessons } : m));
+
+    try {
+      await reorderLessons(moduleId, newOrder);
+    } catch {
+      setModules(prev);
+    }
   }
 
   // ── Lessons ───────────────────────────────────────────────────────────
@@ -609,6 +666,20 @@ export default function ManageCourse() {
                     {/* Module actions */}
                     <div className="flex items-center gap-1 ml-auto shrink-0">
                       <button
+                        onClick={() => handleMoveModule(mod.id, "up")}
+                        disabled={modules.indexOf(mod) === 0}
+                        className="text-muted-foreground hover:text-primary p-1 rounded hover:bg-primary/5 transition-colors disabled:opacity-20 disabled:cursor-default"
+                      >
+                        <ArrowUp className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleMoveModule(mod.id, "down")}
+                        disabled={modules.indexOf(mod) === modules.length - 1}
+                        className="text-muted-foreground hover:text-primary p-1 rounded hover:bg-primary/5 transition-colors disabled:opacity-20 disabled:cursor-default"
+                      >
+                        <ArrowDown className="w-3.5 h-3.5" />
+                      </button>
+                      <button
                         onClick={() => {
                           if (addingLessonInModule === mod.id) {
                             setAddingLessonInModule(null);
@@ -751,6 +822,22 @@ export default function ManageCourse() {
                               </>
                             )}
 
+                            <div className="opacity-0 group-hover/lesson:opacity-100 transition-opacity flex items-center gap-0.5 shrink-0">
+                              <button
+                                onClick={() => handleMoveLesson(mod.id, lesson.id, "up")}
+                                disabled={mod.lessons.indexOf(lesson) === 0}
+                                className="text-muted-foreground hover:text-primary p-1 rounded hover:bg-primary/5 transition-colors disabled:opacity-20 disabled:cursor-default"
+                              >
+                                <ArrowUp className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => handleMoveLesson(mod.id, lesson.id, "down")}
+                                disabled={mod.lessons.indexOf(lesson) === mod.lessons.length - 1}
+                                className="text-muted-foreground hover:text-primary p-1 rounded hover:bg-primary/5 transition-colors disabled:opacity-20 disabled:cursor-default"
+                              >
+                                <ArrowDown className="w-3 h-3" />
+                              </button>
+                            </div>
                             <button
                               onClick={() => handleDeleteLesson(mod.id, lesson.id)}
                               className="opacity-0 group-hover/lesson:opacity-100 transition-opacity text-muted-foreground hover:text-destructive p-1 rounded hover:bg-destructive/5 transition-colors shrink-0"
@@ -820,6 +907,96 @@ export default function ManageCourse() {
                   <Plus className="w-4 h-4" />Add Module
                 </button>
               )}
+            </div>
+          )}
+        </div>
+
+        {/* ── Reviews ──────────────────────────────────────────────────── */}
+        <div className="bg-white rounded-xl border border-border overflow-hidden">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+            <div className="flex items-center gap-2">
+              <MessageSquare className="w-4 h-4 text-muted-foreground" />
+              <h2 className="font-semibold text-foreground">Student Reviews</h2>
+            </div>
+            {reviews && reviews.total_reviews > 0 && (
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-0.5">
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <Star
+                      key={s}
+                      className={cn(
+                        "w-4 h-4",
+                        s <= Math.round(reviews.average_rating)
+                          ? "fill-amber-400 text-amber-400"
+                          : "text-muted-foreground/25"
+                      )}
+                    />
+                  ))}
+                </div>
+                <span className="text-sm font-semibold text-foreground">
+                  {reviews.average_rating.toFixed(1)}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  ({reviews.total_reviews} review{reviews.total_reviews !== 1 ? "s" : ""})
+                </span>
+              </div>
+            )}
+          </div>
+
+          {!reviews ? (
+            <div className="p-6 space-y-3">
+              {[1, 2].map((i) => (
+                <div key={i} className="h-16 bg-secondary rounded-lg animate-pulse" />
+              ))}
+            </div>
+          ) : reviews.total_reviews === 0 ? (
+            <div className="px-6 py-10 text-center">
+              <MessageSquare className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground">No reviews yet.</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {reviews.reviews.map((review) => (
+                <div key={review.id} className="px-6 py-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                        <span className="text-xs font-bold text-primary">
+                          {review.student_name.charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">
+                          {capitalize(review.student_name)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(review.created_at).toLocaleDateString("en-US", {
+                            year: "numeric", month: "short", day: "numeric",
+                          })}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <Star
+                          key={s}
+                          className={cn(
+                            "w-3.5 h-3.5",
+                            s <= review.rating
+                              ? "fill-amber-400 text-amber-400"
+                              : "text-muted-foreground/25"
+                          )}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  {review.comment && (
+                    <p className="mt-2 text-sm text-muted-foreground leading-relaxed pl-10">
+                      {review.comment}
+                    </p>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </div>

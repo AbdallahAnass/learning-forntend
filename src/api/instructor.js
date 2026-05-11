@@ -9,6 +9,10 @@ export function getCourseAnalytics(courseId) {
   return apiFetch(`/instructor/courses/${courseId}/analytics`);
 }
 
+export function getQuizAnalytics(quizId) {
+  return apiFetch(`/instructor/quizzes/${quizId}/analytics`);
+}
+
 export function getCourse(courseId) {
   return apiFetch(`/courses/${courseId}`);
 }
@@ -105,6 +109,20 @@ export async function uploadLessonFile(lessonId, file) {
 
 export function deleteLessonFile(lessonId) {
   return apiFetch(`/courses/lessons/${lessonId}/file`, { method: "DELETE" });
+}
+
+export function reorderModules(courseId, newOrder) {
+  return apiFetch(`/courses/${courseId}/modules/reorder`, {
+    method: "PUT",
+    body: JSON.stringify(newOrder),
+  });
+}
+
+export function reorderLessons(moduleId, newOrder) {
+  return apiFetch(`/courses/modules/${moduleId}/reorder`, {
+    method: "PUT",
+    body: JSON.stringify(newOrder),
+  });
 }
 
 export async function uploadThumbnail(courseId, file) {
