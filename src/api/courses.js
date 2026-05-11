@@ -50,6 +50,10 @@ export async function getLessonFileUrl(lessonId) {
   return { url: URL.createObjectURL(blob), type: res.headers.get("content-type") || "" };
 }
 
+export function getLessonSummary(lessonId) {
+  return apiFetch(`/courses/lessons/${lessonId}/summary`);
+}
+
 export async function fetchThumbnailUrl(courseId) {
   const token = getToken();
   const res = await fetch(`${BASE_URL}/courses/${courseId}/thumbnail`, {

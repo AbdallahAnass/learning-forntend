@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft, ArrowRight, Bot, CheckCircle, ChevronDown, ChevronRight,
-  FileText, Loader2, PlayCircle, Send, Trophy, X,
+  FileText, Loader2, PlayCircle, Send, Sparkles, Trophy, X,
 } from "lucide-react";
-import { getCourse, getCourseModules, getModuleLessons, getLessonFileUrl, askCourse } from "@/api/courses";
+import { getCourse, getCourseModules, getModuleLessons, getLessonFileUrl, askCourse, getLessonSummary } from "@/api/courses";
 import { getQuiz, submitQuiz, getQuizResult, fetchQuestionImageBlob, fetchAnswerImageBlob } from "@/api/quiz";
 import { markLessonComplete, getCompletedLessons } from "@/api/enrollment";
 
@@ -230,22 +230,61 @@ function QuizViewer({ lessonId, onComplete }) {
 
 // ─── File viewer (video / pdf) ────────────────────────────────────────────────
 
+function SummaryPanel({ text }) {
+  const lines = text.split("\n").filter((l) => l.trim());
+  return (
+    <div className="shrink-0 border-t border-border bg-amber-50 px-6 py-4 overflow-y-auto max-h-64">
+      <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-2">Lesson Summary</p>
+      <ul className="space-y-1.5">
+        {lines.map((line, i) => {
+          const text = line.replace(/^[\s\-\*\•]+/, "").trim();
+          return text ? (
+            <li key={i} className="flex gap-2 text-sm text-foreground leading-relaxed">
+              <span className="text-amber-500 shrink-0 mt-0.5">•</span>
+              <span>{text}</span>
+            </li>
+          ) : null;
+        })}
+      </ul>
+    </div>
+  );
+}
+
 function FileViewer({ lesson, alreadyCompleted, onComplete }) {
   const [fileData, setFileData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [justMarked, setJustMarked] = useState(false);
+  const [summary, setSummary] = useState(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryError, setSummaryError] = useState("");
+  const [showSummary, setShowSummary] = useState(false);
   const prevIdRef = useRef(null);
 
   useEffect(() => {
     if (prevIdRef.current === lesson.id) return;
     prevIdRef.current = lesson.id;
     setFileData(null); setError(""); setJustMarked(false); setLoading(true);
+    setSummary(null); setSummaryError(""); setShowSummary(false);
     getLessonFileUrl(lesson.id)
       .then(setFileData)
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, [lesson.id]);
+
+  async function handleSummarize() {
+    if (summary) { setShowSummary((v) => !v); return; }
+    setSummaryLoading(true); setSummaryError("");
+    try {
+      const data = await getLessonSummary(lesson.id);
+      setSummary(data.summary);
+      setShowSummary(true);
+    } catch (err) {
+      setSummaryError(err.message);
+    } finally {
+      setSummaryLoading(false);
+    }
+  }
 
   const isCompleted = alreadyCompleted || justMarked;
 
@@ -290,20 +329,35 @@ function FileViewer({ lesson, alreadyCompleted, onComplete }) {
         )}
       </div>
 
-      <div className="shrink-0 px-6 py-3 border-t border-border flex items-center justify-between bg-white">
-        <h2 className="text-sm font-semibold text-foreground capitalize">{lesson.title}</h2>
-        <button
-          onClick={handleMarkComplete}
-          disabled={isCompleted}
-          className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-            isCompleted
-              ? "bg-emerald-50 text-emerald-700 cursor-default"
-              : "bg-primary text-primary-foreground hover:bg-primary/90"
-          }`}
-        >
-          <CheckCircle className="w-4 h-4" />
-          {isCompleted ? "Completed" : "Mark as Complete"}
-        </button>
+      {showSummary && summary && <SummaryPanel text={summary} />}
+
+      <div className="shrink-0 px-6 py-3 border-t border-border flex items-center justify-between bg-white gap-3">
+        <h2 className="text-sm font-semibold text-foreground capitalize truncate">{lesson.title}</h2>
+        <div className="flex items-center gap-2 shrink-0">
+          {summaryError && <span className="text-xs text-destructive">{summaryError}</span>}
+          <button
+            onClick={handleSummarize}
+            disabled={summaryLoading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border border-border hover:bg-secondary transition-colors disabled:opacity-60"
+          >
+            {summaryLoading
+              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              : <Sparkles className="w-3.5 h-3.5 text-amber-500" />}
+            {summaryLoading ? "Summarizing…" : showSummary ? "Hide Summary" : "Summarize"}
+          </button>
+          <button
+            onClick={handleMarkComplete}
+            disabled={isCompleted}
+            className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              isCompleted
+                ? "bg-emerald-50 text-emerald-700 cursor-default"
+                : "bg-primary text-primary-foreground hover:bg-primary/90"
+            }`}
+          >
+            <CheckCircle className="w-4 h-4" />
+            {isCompleted ? "Completed" : "Mark as Complete"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -333,10 +387,18 @@ function AiChat({ courseId, onClose }) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef(null);
+  const inputRef = useRef(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = el.scrollHeight + "px";
+  }, [input]);
 
   async function handleSend() {
     const q = input.trim();
@@ -417,12 +479,13 @@ function AiChat({ courseId, onClose }) {
       <div className="shrink-0 bg-white border-t border-border px-6 py-4">
         <div className="flex gap-3 items-end bg-secondary rounded-xl px-4 py-3">
           <textarea
+            ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKey}
             placeholder="Ask a question about this course…"
             rows={1}
-            className="flex-1 resize-none text-sm bg-transparent outline-none max-h-32 leading-snug"
+            className="flex-1 resize-none text-sm bg-transparent outline-none leading-snug overflow-hidden"
           />
           <button
             onClick={handleSend}

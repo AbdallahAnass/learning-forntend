@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { BookOpen, GraduationCap } from "lucide-react";
+import { BookOpen, GraduationCap, Heart, MessageCircle } from "lucide-react";
 import StudentLayout from "@/components/StudentLayout";
 import { getEnrolledCourses, getCourseProgress } from "@/api/enrollment";
 import { fetchThumbnailUrl } from "@/api/courses";
+import { getWellnessAdvice } from "@/api/wellness";
 
 function ProgressBar({ pct }) {
   return (
@@ -93,11 +94,15 @@ export default function MyLearning() {
   const navigate = useNavigate();
   const [courses, setCourses] = useState(null);
   const [error, setError] = useState("");
+  const [advice, setAdvice] = useState(null);
 
   useEffect(() => {
     getEnrolledCourses()
       .then(setCourses)
       .catch((err) => setError(err.message));
+    getWellnessAdvice()
+      .then((data) => setAdvice(data.advice))
+      .catch(() => {});
   }, []);
 
   return (
@@ -106,6 +111,35 @@ export default function MyLearning() {
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-foreground">My Learning</h1>
           <p className="text-sm text-muted-foreground mt-1">Pick up where you left off.</p>
+        </div>
+
+        {/* Wellness section */}
+        <div className="mb-8 rounded-2xl bg-white border border-border shadow-sm overflow-hidden">
+          <div className="flex items-start gap-4 p-5">
+            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+              <Heart className="w-5 h-5 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h2 className="text-sm font-semibold text-foreground mb-1">Wellness Companion</h2>
+              {advice === null ? (
+                <div className="space-y-1.5">
+                  <div className="h-3 bg-muted rounded animate-pulse w-full" />
+                  <div className="h-3 bg-muted rounded animate-pulse w-4/5" />
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground leading-relaxed">{advice}</p>
+              )}
+            </div>
+          </div>
+          <div className="border-t border-border px-5 py-3 flex justify-end">
+            <button
+              onClick={() => navigate("/wellness")}
+              className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+            >
+              <MessageCircle className="w-4 h-4" />
+              Chat with Companion
+            </button>
+          </div>
         </div>
 
         {error && (

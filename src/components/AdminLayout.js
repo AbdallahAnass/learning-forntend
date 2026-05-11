@@ -1,14 +1,15 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { LayoutDashboard, BookOpen, LogOut, GraduationCap } from "lucide-react";
+import { BarChart3, BookOpen, GraduationCap, LogOut, Users } from "lucide-react";
 import { removeToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { to: "/instructor/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { to: "/instructor/courses", icon: BookOpen, label: "My Courses" },
+  { to: "/admin/dashboard", icon: BarChart3, label: "Dashboard" },
+  { to: "/admin/users",     icon: Users,     label: "Users"     },
+  { to: "/admin/courses",   icon: BookOpen,  label: "Courses"   },
 ];
 
-export default function InstructorLayout({ children }) {
+export default function AdminLayout({ children }) {
   const navigate = useNavigate();
 
   function handleLogout() {
@@ -19,17 +20,18 @@ export default function InstructorLayout({ children }) {
   return (
     <div className="min-h-screen flex bg-secondary">
       {/* Sidebar */}
-      <aside className="w-60 shrink-0 bg-white border-r border-border flex flex-col fixed top-0 left-0 h-screen z-40">
+      <aside className="w-56 shrink-0 bg-white border-r border-border flex flex-col fixed top-0 left-0 h-screen z-40">
         {/* Logo */}
-        <div className="h-16 flex items-center px-6 border-b border-border">
-          <GraduationCap className="w-6 h-6 text-primary mr-2" />
-          <span className="text-lg font-bold text-primary tracking-tight">
-            LearnLite
-          </span>
+        <div className="h-16 flex items-center gap-2 px-5 border-b border-border">
+          <GraduationCap className="w-5 h-5 text-primary" />
+          <div>
+            <p className="text-sm font-bold text-primary leading-none">LearnLite</p>
+            <p className="text-xs text-muted-foreground">Admin Panel</p>
+          </div>
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 py-4 px-3 space-y-1">
+        <nav className="flex-1 p-3 space-y-0.5">
           {navItems.map(({ to, icon: Icon, label }) => (
             <NavLink
               key={to}
@@ -38,7 +40,7 @@ export default function InstructorLayout({ children }) {
                 cn(
                   "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
                   isActive
-                    ? "bg-primary text-primary-foreground"
+                    ? "bg-primary/10 text-primary"
                     : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                 )
               }
@@ -53,7 +55,7 @@ export default function InstructorLayout({ children }) {
         <div className="p-3 border-t border-border">
           <button
             onClick={handleLogout}
-            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors"
           >
             <LogOut className="w-4 h-4" />
             Log Out
@@ -62,9 +64,9 @@ export default function InstructorLayout({ children }) {
       </aside>
 
       {/* Main content — offset by sidebar width */}
-      <main className="flex-1 ml-60">
-        {children}
-      </main>
+      <div className="flex-1 min-w-0 flex flex-col ml-56">
+        <main className="flex-1 p-8">{children}</main>
+      </div>
     </div>
   );
 }
