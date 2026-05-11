@@ -14,6 +14,7 @@ import {
   uploadLessonFile, deleteLessonFile,
 } from "@/api/instructor";
 import { fetchThumbnailUrl } from "@/api/courses";
+import { getQuiz, deleteQuiz } from "@/api/quiz";
 import { cn } from "@/lib/utils";
 
 function capitalize(str) {
@@ -267,11 +268,25 @@ export default function ManageCourse() {
   }
 
   async function handleDeleteLesson(moduleId, lessonId) {
+    const lesson = modules.find((m) => m.id === moduleId)?.lessons.find((l) => l.id === lessonId);
+    if (lesson?.content_type === "quiz") {
+      try {
+        const quiz = await getQuiz(lessonId);
+        await deleteQuiz(quiz.id);
+      } catch {} // no quiz yet — fine
+    }
     try {
       await deleteLesson(lessonId);
       setModules((ms) => ms.map((m) =>
         m.id === moduleId ? { ...m, lessons: m.lessons.filter((l) => l.id !== lessonId) } : m
       ));
+    } catch {}
+  }
+
+  async function handleDeleteQuizContent(moduleId, lessonId) {
+    try {
+      const quiz = await getQuiz(lessonId);
+      await deleteQuiz(quiz.id);
     } catch {}
   }
 
@@ -671,6 +686,25 @@ export default function ManageCourse() {
                                   className="opacity-0 group-hover/les:opacity-100 transition-opacity text-muted-foreground hover:text-primary shrink-0"
                                 >
                                   <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            )}
+
+                            {/* Quiz actions */}
+                            {lesson.content_type === "quiz" && (
+                              <div className="opacity-0 group-hover/lesson:opacity-100 transition-opacity flex items-center gap-1 shrink-0">
+                                <button
+                                  onClick={() => navigate(`/instructor/courses/${courseId}/lessons/${lesson.id}/quiz`)}
+                                  className="text-xs text-amber-600 hover:text-amber-700 px-2 py-0.5 rounded border border-amber-200 hover:bg-amber-50 transition-colors flex items-center gap-1"
+                                >
+                                  <HelpCircle className="w-3 h-3" />Edit Quiz
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteQuizContent(mod.id, lesson.id)}
+                                  className="text-xs text-muted-foreground hover:text-destructive px-2 py-0.5 rounded border border-border hover:border-destructive/40 hover:bg-destructive/5 transition-colors flex items-center gap-1"
+                                  title="Delete quiz content"
+                                >
+                                  <Trash2 className="w-3 h-3" />Quiz
                                 </button>
                               </div>
                             )}

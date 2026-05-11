@@ -6,6 +6,7 @@ import InstructorDashboard from "@/pages/instructor/Dashboard";
 import InstructorMyCourses from "@/pages/instructor/MyCourses";
 import InstructorCreateCourse from "@/pages/instructor/CreateCourse";
 import InstructorManageCourse from "@/pages/instructor/ManageCourse";
+import InstructorQuizBuilder from "@/pages/instructor/QuizBuilder";
 import ProtectedRoute from "@/components/ProtectedRoute";
 
 function App() {
@@ -44,6 +45,14 @@ function App() {
           element={
             <ProtectedRoute role="instructor">
               <InstructorManageCourse />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/instructor/courses/:courseId/lessons/:lessonId/quiz"
+          element={
+            <ProtectedRoute role="instructor">
+              <InstructorQuizBuilder />
             </ProtectedRoute>
           }
         />
