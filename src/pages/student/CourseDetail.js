@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   BookOpen, ChevronDown, ChevronRight, FileText,
-  GraduationCap, PlayCircle, Star, Users,
+  GraduationCap, Pencil, PlayCircle, Star, Trash2, Users,
 } from "lucide-react";
 import StudentLayout from "@/components/StudentLayout";
 import {
@@ -10,6 +10,7 @@ import {
   getCourseReviews, fetchThumbnailUrl,
 } from "@/api/courses";
 import { getEnrollmentStatus, enrollInCourse } from "@/api/enrollment";
+import { submitReview, updateReview, deleteReview, getMyReview } from "@/api/reviews";
 
 function StarRating({ value, size = "sm" }) {
   const full = Math.round(value ?? 0);
@@ -73,6 +74,107 @@ function ModuleRow({ module }) {
   );
 }
 
+function StarPicker({ value, onChange }) {
+  const [hovered, setHovered] = useState(0);
+  return (
+    <div className="flex gap-1">
+      {[1, 2, 3, 4, 5].map((star) => (
+        <button
+          key={star}
+          type="button"
+          onClick={() => onChange(star)}
+          onMouseEnter={() => setHovered(star)}
+          onMouseLeave={() => setHovered(0)}
+        >
+          <Star className={`w-6 h-6 transition-colors ${
+            star <= (hovered || value)
+              ? "fill-amber-400 text-amber-400"
+              : "text-muted-foreground/30"
+          }`} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ReviewForm({ courseId, existingReview, onSaved, onDeleted }) {
+  const [rating, setRating] = useState(existingReview?.rating ?? 0);
+  const [comment, setComment] = useState(existingReview?.comment ?? "");
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState("");
+  const isEdit = !!existingReview;
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!rating) { setError("Please select a star rating."); return; }
+    setSaving(true); setError("");
+    try {
+      const saved = isEdit
+        ? await updateReview(existingReview.id, rating, comment)
+        : await submitReview(courseId, rating, comment);
+      onSaved(saved);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    setDeleting(true);
+    try {
+      await deleteReview(existingReview.id);
+      onDeleted();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-border p-4 space-y-3">
+      <h3 className="text-sm font-semibold text-foreground">
+        {isEdit ? "Edit your review" : "Leave a review"}
+      </h3>
+
+      <StarPicker value={rating} onChange={setRating} />
+
+      <textarea
+        value={comment}
+        onChange={(e) => setComment(e.target.value)}
+        placeholder="Share your thoughts about this course (optional)"
+        rows={3}
+        className="w-full text-sm rounded-lg border border-border px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
+      />
+
+      {error && <p className="text-xs text-destructive">{error}</p>}
+
+      <div className="flex items-center gap-2">
+        <button
+          type="submit"
+          disabled={saving}
+          className="px-4 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-60 transition-colors"
+        >
+          {saving ? "Saving…" : isEdit ? "Update" : "Submit"}
+        </button>
+        {isEdit && (
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={deleting}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-destructive hover:bg-destructive/10 disabled:opacity-60 transition-colors"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            {deleting ? "Deleting…" : "Delete"}
+          </button>
+        )}
+      </div>
+    </form>
+  );
+}
+
 function ReviewCard({ review }) {
   const initials = (review.student_name ?? "?")
     .split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
@@ -84,7 +186,7 @@ function ReviewCard({ review }) {
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
-          <span className="text-sm font-medium text-foreground">{review.student_name}</span>
+          <span className="text-sm font-medium text-foreground capitalize">{review.student_name}</span>
           <StarRating value={review.rating} />
         </div>
         {review.comment && (
@@ -104,6 +206,7 @@ export default function CourseDetail() {
   const [modules, setModules] = useState([]);
   const [reviews, setReviews] = useState(null);
   const [enrollStatus, setEnrollStatus] = useState(null);
+  const [myReview, setMyReview] = useState(undefined);
   const [loading, setLoading] = useState(true);
   const [enrolling, setEnrolling] = useState(false);
   const [enrollError, setEnrollError] = useState("");
@@ -122,7 +225,18 @@ export default function CourseDetail() {
     getCourseModules(courseId).then(setModules).catch(() => {});
     getCourseReviews(courseId).then(setReviews).catch(() => {});
     getEnrollmentStatus(courseId).then(setEnrollStatus).catch(() => {});
+    getMyReview(courseId).then((r) => setMyReview(r ?? null)).catch(() => setMyReview(null));
   }, [courseId]);
+
+  function handleReviewSaved(saved) {
+    setMyReview(saved);
+    getCourseReviews(courseId).then(setReviews).catch(() => {});
+  }
+
+  function handleReviewDeleted() {
+    setMyReview(null);
+    getCourseReviews(courseId).then(setReviews).catch(() => {});
+  }
 
   async function handleEnroll() {
     setEnrolling(true);
@@ -224,7 +338,7 @@ export default function CourseDetail() {
             {reviews === null ? (
               <div className="h-16 bg-muted rounded animate-pulse" />
             ) : totalReviews === 0 ? (
-              <p className="text-sm text-muted-foreground">No reviews yet.</p>
+              !isEnrolled && <p className="text-sm text-muted-foreground">No reviews yet.</p>
             ) : (
               <>
                 {/* Summary */}
@@ -257,6 +371,18 @@ export default function CourseDetail() {
                   {reviews.reviews.map((r) => <ReviewCard key={r.id} review={r} />)}
                 </div>
               </>
+            )}
+
+            {/* Review form for enrolled students */}
+            {isEnrolled && myReview !== undefined && (
+              <div className="mt-4">
+                <ReviewForm
+                  courseId={courseId}
+                  existingReview={myReview}
+                  onSaved={handleReviewSaved}
+                  onDeleted={handleReviewDeleted}
+                />
+              </div>
             )}
           </section>
         </div>
