@@ -1,3 +1,27 @@
+// student/CourseDetail.js — Public-facing course detail page with enrollment, content
+// preview, reviews, and a review submission form.
+//
+// Page layout:
+//   ┌─────────────────────────────────────────────────────┐
+//   │  Hero banner (dark bg): title, description, skills, │
+//   │  star rating summary, thumbnail                      │
+//   ├──────────────────────────────┬──────────────────────┤
+//   │  Left (flex-1):              │  Right (w-72 sticky): │
+//   │   • Course content accordion │   Enrollment card     │
+//   │   • Student reviews section  │   (Enroll / Continue  │
+//   │   • Review submit/edit form  │    / Unenroll buttons)│
+//   └──────────────────────────────┴──────────────────────┘
+//
+// Enrollment states drive the right-hand card:
+//   null       → still fetching (skeleton button)
+//   "active"   → "Continue Learning" + Unenroll
+//   "completed"→ "Continue Learning" (no Unenroll)
+//   anything else → "Enroll Now"
+//
+// Review form is shown only when the student is enrolled (`isEnrolled`).
+// `myReview` starts as `undefined` (loading) so we suppress the form until we know
+// whether a review exists, avoiding a flash of the empty form on load.
+
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -12,6 +36,7 @@ import {
 import { getEnrollmentStatus, enrollInCourse, unenrollFromCourse } from "@/api/enrollment";
 import { submitReview, updateReview, deleteReview, getMyReview } from "@/api/reviews";
 
+// Read-only star rating; size prop switches between small (default) and large icon sizes.
 function StarRating({ value, size = "sm" }) {
   const full = Math.round(value ?? 0);
   const cls = size === "lg" ? "w-5 h-5" : "w-3.5 h-3.5";
@@ -24,26 +49,32 @@ function StarRating({ value, size = "sm" }) {
   );
 }
 
+// Small icon used in module accordions to visually distinguish lesson types.
 function LessonIcon({ type }) {
   if (type === "video") return <PlayCircle className="w-3.5 h-3.5 text-muted-foreground shrink-0" />;
   return <FileText className="w-3.5 h-3.5 text-muted-foreground shrink-0" />;
 }
 
+// Collapsible accordion row for a single course module.
+// Lessons are fetched lazily on first open — not pre-loaded with the page — so
+// students browsing modules with many lessons don't wait for all of them up front.
 function ModuleRow({ module }) {
   const [open, setOpen] = useState(false);
-  const [lessons, setLessons] = useState(null);
+  const [lessons, setLessons] = useState(null); // null = not yet fetched
 
   function toggle() {
     setOpen((v) => !v);
+    // Only fetch once — if lessons is already populated, just toggle the panel.
     if (!lessons) {
       getModuleLessons(module.id)
         .then(setLessons)
-        .catch(() => setLessons([]));
+        .catch(() => setLessons([])); // On error show empty state rather than hanging
     }
   }
 
   return (
     <div className="border border-border rounded-lg overflow-hidden">
+      {/* Module header button — chevron indicates open/closed */}
       <button
         onClick={toggle}
         className="w-full flex items-center justify-between px-4 py-3 bg-white hover:bg-secondary/50 transition-colors text-left"
@@ -54,9 +85,11 @@ function ModuleRow({ module }) {
           : <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />}
       </button>
 
+      {/* Lesson list — rendered only while the accordion is open */}
       {open && (
         <div className="border-t border-border divide-y divide-border bg-secondary/30">
           {lessons === null ? (
+            // Loading state — animate-pulse flickers while lessons are being fetched
             <div className="px-4 py-3 text-xs text-muted-foreground animate-pulse">Loading…</div>
           ) : lessons.length === 0 ? (
             <div className="px-4 py-3 text-xs text-muted-foreground">No lessons yet.</div>
@@ -74,6 +107,8 @@ function ModuleRow({ module }) {
   );
 }
 
+// Interactive 5-star picker for the review form.
+// `hovered` state drives visual feedback while the user hovers before clicking.
 function StarPicker({ value, onChange }) {
   const [hovered, setHovered] = useState(0);
   return (
@@ -86,6 +121,7 @@ function StarPicker({ value, onChange }) {
           onMouseEnter={() => setHovered(star)}
           onMouseLeave={() => setHovered(0)}
         >
+          {/* Fill stars up to the hovered value (preview) or the committed value */}
           <Star className={`w-6 h-6 transition-colors ${
             star <= (hovered || value)
               ? "fill-amber-400 text-amber-400"
@@ -97,23 +133,28 @@ function StarPicker({ value, onChange }) {
   );
 }
 
+// Review creation / editing form.
+// `existingReview` is null when submitting a new review; truthy when editing.
+// `onSaved` is called with the saved review object after a successful submit/update.
+// `onDeleted` is called (no args) after the review is successfully deleted.
 function ReviewForm({ courseId, existingReview, onSaved, onDeleted }) {
   const [rating, setRating] = useState(existingReview?.rating ?? 0);
   const [comment, setComment] = useState(existingReview?.comment ?? "");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
-  const isEdit = !!existingReview;
+  const isEdit = !!existingReview; // Determines button label and which API to call
 
   async function handleSubmit(e) {
     e.preventDefault();
+    // Client-side rating guard — the star picker starts at 0 which is invalid
     if (!rating) { setError("Please select a star rating."); return; }
     setSaving(true); setError("");
     try {
       const saved = isEdit
         ? await updateReview(existingReview.id, rating, comment)
         : await submitReview(courseId, rating, comment);
-      onSaved(saved);
+      onSaved(saved); // Notify parent to update myReview + refresh public reviews list
     } catch (err) {
       setError(err.message);
     } finally {
@@ -125,7 +166,7 @@ function ReviewForm({ courseId, existingReview, onSaved, onDeleted }) {
     setDeleting(true);
     try {
       await deleteReview(existingReview.id);
-      onDeleted();
+      onDeleted(); // Notify parent to set myReview → null + refresh reviews list
     } catch (err) {
       setError(err.message);
     } finally {
@@ -139,8 +180,10 @@ function ReviewForm({ courseId, existingReview, onSaved, onDeleted }) {
         {isEdit ? "Edit your review" : "Leave a review"}
       </h3>
 
+      {/* Interactive star picker */}
       <StarPicker value={rating} onChange={setRating} />
 
+      {/* Optional comment textarea */}
       <textarea
         value={comment}
         onChange={(e) => setComment(e.target.value)}
@@ -152,6 +195,7 @@ function ReviewForm({ courseId, existingReview, onSaved, onDeleted }) {
       {error && <p className="text-xs text-destructive">{error}</p>}
 
       <div className="flex items-center gap-2">
+        {/* Submit / Update button */}
         <button
           type="submit"
           disabled={saving}
@@ -159,6 +203,7 @@ function ReviewForm({ courseId, existingReview, onSaved, onDeleted }) {
         >
           {saving ? "Saving…" : isEdit ? "Update" : "Submit"}
         </button>
+        {/* Delete button — only shown when editing an existing review */}
         {isEdit && (
           <button
             type="button"
@@ -175,12 +220,16 @@ function ReviewForm({ courseId, existingReview, onSaved, onDeleted }) {
   );
 }
 
+// Read-only review card displayed in the public reviews list.
+// Derives avatar initials from the student's name stored on the review object.
 function ReviewCard({ review }) {
+  // Build up to 2-character initials from the student's display name
   const initials = (review.student_name ?? "?")
     .split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
 
   return (
     <div className="flex gap-3 py-4 border-b border-border last:border-0">
+      {/* Circular avatar with initials */}
       <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0">
         {initials}
       </div>
@@ -201,40 +250,53 @@ export default function CourseDetail() {
   const { courseId } = useParams();
   const navigate = useNavigate();
 
-  const [course, setCourse] = useState(null);
-  const [thumb, setThumb] = useState(null);
-  const [modules, setModules] = useState([]);
-  const [reviews, setReviews] = useState(null);
-  const [enrollStatus, setEnrollStatus] = useState(null);
+  // ── Page data state ────────────────────────────────────────────────────────
+  const [course, setCourse] = useState(null);     // Core course object (title, description, …)
+  const [thumb, setThumb] = useState(null);       // Object URL for the hero thumbnail
+  const [modules, setModules] = useState([]);     // Course modules for the content accordion
+  const [reviews, setReviews] = useState(null);   // { average_rating, total_reviews, reviews[] }
+  const [enrollStatus, setEnrollStatus] = useState(null); // "active" | "completed" | other | null
+  // undefined = still loading; null = no review exists; object = existing review
   const [myReview, setMyReview] = useState(undefined);
   const [loading, setLoading] = useState(true);
+
+  // ── Action state ───────────────────────────────────────────────────────────
   const [enrolling, setEnrolling] = useState(false);
   const [enrollError, setEnrollError] = useState("");
   const [unenrolling, setUnenrolling] = useState(false);
 
+  // ── Data loading ───────────────────────────────────────────────────────────
+  // All requests fire concurrently on mount. The page loading flag tracks only the
+  // core course fetch — modules and reviews have their own null/loading states.
   useEffect(() => {
     setLoading(true);
 
+    // Primary fetch — gate the loading spinner on this one
     getCourse(courseId)
       .then((c) => {
         setCourse(c);
+        // Fetch thumbnail separately (binary Blob endpoint) after the course meta arrives
         fetchThumbnailUrl(courseId).then(setThumb).catch(() => {});
       })
       .catch(() => {})
       .finally(() => setLoading(false));
 
+    // These can all start in parallel — none depend on the course object
     getCourseModules(courseId).then(setModules).catch(() => {});
     getCourseReviews(courseId).then(setReviews).catch(() => {});
     getEnrollmentStatus(courseId).then(setEnrollStatus).catch(() => {});
+    // `r ?? null` converts undefined (no review) to null to distinguish "no review" from
+    // "still loading" (which is the initial `undefined` state).
     getMyReview(courseId).then((r) => setMyReview(r ?? null)).catch(() => setMyReview(null));
   }, [courseId]);
 
+  // ── Unenroll handler ───────────────────────────────────────────────────────
   async function handleUnenroll() {
     setUnenrolling(true);
     try {
       await unenrollFromCourse(courseId);
       setEnrollStatus("unenrolled");
-      setMyReview(null);
+      setMyReview(null); // Unenrolling removes the student's review capability
     } catch (err) {
       setEnrollError(err.message);
     } finally {
@@ -242,6 +304,9 @@ export default function CourseDetail() {
     }
   }
 
+  // ── Review callbacks ───────────────────────────────────────────────────────
+  // After a review is saved, update myReview and re-fetch the public list so the
+  // aggregate rating (average + count) reflects the new/updated review immediately.
   function handleReviewSaved(saved) {
     setMyReview(saved);
     getCourseReviews(courseId).then(setReviews).catch(() => {});
@@ -252,12 +317,13 @@ export default function CourseDetail() {
     getCourseReviews(courseId).then(setReviews).catch(() => {});
   }
 
+  // ── Enroll handler ─────────────────────────────────────────────────────────
   async function handleEnroll() {
     setEnrolling(true);
     setEnrollError("");
     try {
       await enrollInCourse(courseId);
-      setEnrollStatus("active");
+      setEnrollStatus("active"); // Immediately reflect enrollment in the UI
     } catch (err) {
       setEnrollError(err.message);
     } finally {
@@ -265,8 +331,11 @@ export default function CourseDetail() {
     }
   }
 
+  // A student is considered "enrolled" if their status is active OR already completed.
+  // This affects which buttons appear in the enrollment card and whether the review form shows.
   const isEnrolled = enrollStatus === "active" || enrollStatus === "completed";
 
+  // ── Loading state ──────────────────────────────────────────────────────────
   if (loading) {
     return (
       <StudentLayout>
@@ -279,6 +348,7 @@ export default function CourseDetail() {
     );
   }
 
+  // ── 404 state ──────────────────────────────────────────────────────────────
   if (!course) {
     return (
       <StudentLayout>
@@ -296,14 +366,15 @@ export default function CourseDetail() {
 
   return (
     <StudentLayout>
-      {/* Hero banner */}
+      {/* ── Hero banner (dark background) ─────────────────────────────────── */}
       <div className="bg-foreground text-background">
         <div className="max-w-5xl mx-auto px-6 py-10 flex flex-col md:flex-row gap-8 items-start">
-          {/* Text */}
+          {/* Left: course metadata */}
           <div className="flex-1 min-w-0">
             <h1 className="text-2xl font-bold leading-tight mb-3 capitalize">{course.title}</h1>
             <p className="text-sm text-background/70 mb-4 capitalize">{course.description}</p>
 
+            {/* Skill tags */}
             {skills.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mb-4">
                 {skills.map((s) => (
@@ -312,6 +383,7 @@ export default function CourseDetail() {
               </div>
             )}
 
+            {/* Aggregate rating — hidden when there are no reviews */}
             {avgRating !== null && (
               <div className="flex items-center gap-2">
                 <span className="font-bold text-amber-400">{avgRating.toFixed(1)}</span>
@@ -321,7 +393,7 @@ export default function CourseDetail() {
             )}
           </div>
 
-          {/* Thumbnail */}
+          {/* Right: course thumbnail (or placeholder icon on dark bg) */}
           <div className="w-full md:w-72 shrink-0 rounded-xl overflow-hidden border border-white/10 bg-white/5 aspect-video flex items-center justify-center">
             {thumb
               ? <img src={thumb} alt={course.title} className="w-full h-full object-cover" />
@@ -330,11 +402,13 @@ export default function CourseDetail() {
         </div>
       </div>
 
-      {/* Body */}
+      {/* ── Body ──────────────────────────────────────────────────────────── */}
       <div className="max-w-5xl mx-auto px-6 py-8 flex flex-col lg:flex-row gap-8">
-        {/* Left: modules + reviews */}
+
+        {/* ── Left column: course content + reviews ──────────────────────── */}
         <div className="flex-1 min-w-0 space-y-8">
-          {/* Course content */}
+
+          {/* Course content accordion */}
           <section>
             <h2 className="text-base font-semibold text-foreground mb-3">Course Content</h2>
             {modules.length === 0 ? (
@@ -346,22 +420,25 @@ export default function CourseDetail() {
             )}
           </section>
 
-          {/* Reviews */}
+          {/* Student reviews section */}
           <section>
             <h2 className="text-base font-semibold text-foreground mb-4">Student Reviews</h2>
             {reviews === null ? (
+              // Reviews still loading
               <div className="h-16 bg-muted rounded animate-pulse" />
             ) : totalReviews === 0 ? (
+              // "No reviews" message — only for non-enrolled visitors (enrolled students see the form)
               !isEnrolled && <p className="text-sm text-muted-foreground">No reviews yet.</p>
             ) : (
               <>
-                {/* Summary */}
+                {/* Rating summary: big number + star row + histogram bars */}
                 <div className="flex items-center gap-4 p-4 bg-white rounded-xl border border-border mb-4">
                   <div className="text-center">
                     <p className="text-4xl font-bold text-foreground">{avgRating.toFixed(1)}</p>
                     <StarRating value={avgRating} size="lg" />
                     <p className="text-xs text-muted-foreground mt-1">{totalReviews} reviews</p>
                   </div>
+                  {/* Per-star breakdown histogram */}
                   <div className="flex-1">
                     {[5, 4, 3, 2, 1].map((star) => {
                       const count = reviews.reviews.filter((r) => r.rating === star).length;
@@ -371,6 +448,7 @@ export default function CourseDetail() {
                           <span className="text-xs w-3 text-muted-foreground">{star}</span>
                           <Star className="w-3 h-3 fill-amber-400 text-amber-400 shrink-0" />
                           <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                            {/* Bar width is the percentage of reviews at this star level */}
                             <div className="h-full bg-amber-400 rounded-full" style={{ width: `${pct}%` }} />
                           </div>
                           <span className="text-xs text-muted-foreground w-6 text-right">{pct}%</span>
@@ -380,19 +458,20 @@ export default function CourseDetail() {
                   </div>
                 </div>
 
-                {/* Individual reviews */}
+                {/* Individual review cards */}
                 <div className="bg-white rounded-xl border border-border px-4">
                   {reviews.reviews.map((r) => <ReviewCard key={r.id} review={r} />)}
                 </div>
               </>
             )}
 
-            {/* Review form for enrolled students */}
+            {/* Review form — only shown to enrolled students; hidden until myReview resolves */}
+            {/* myReview === undefined means still loading → don't show form yet */}
             {isEnrolled && myReview !== undefined && (
               <div className="mt-4">
                 <ReviewForm
                   courseId={courseId}
-                  existingReview={myReview}
+                  existingReview={myReview}   // null = new review; object = editing existing
                   onSaved={handleReviewSaved}
                   onDeleted={handleReviewDeleted}
                 />
@@ -401,27 +480,34 @@ export default function CourseDetail() {
           </section>
         </div>
 
-        {/* Right: enrollment card */}
+        {/* ── Right column: sticky enrollment card ────────────────────────── */}
         <div className="w-full lg:w-72 shrink-0">
+          {/* sticky top-24 keeps the card visible while scrolling the left column */}
           <div className="sticky top-24 bg-white rounded-xl border border-border shadow-sm p-5 space-y-4">
+            {/* Contextual blurb under the card heading */}
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Users className="w-4 h-4" />
               <span>{totalReviews > 0 ? `${totalReviews} student reviews` : isEnrolled ? "You're enrolled" : "No reviews yet"}</span>
             </div>
 
+            {/* Enrollment status drives which buttons are shown */}
             {enrollStatus === null ? (
+              // Enrollment status still loading — show skeleton button
               <div className="h-10 bg-muted rounded animate-pulse" />
             ) : isEnrolled ? (
               <>
+                {/* Label: Enrolled or Completed */}
                 <div className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
                   {enrollStatus === "completed" ? "Completed" : "Enrolled"}
                 </div>
+                {/* Navigate to the lesson viewer for this course */}
                 <button
                   onClick={() => navigate(`/courses/${courseId}/learn`)}
                   className="w-full py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
                 >
                   Continue Learning
                 </button>
+                {/* Unenroll is only available while the course is still active (not completed) */}
                 {enrollStatus !== "completed" && (
                   <button
                     onClick={handleUnenroll}
@@ -434,6 +520,7 @@ export default function CourseDetail() {
               </>
             ) : (
               <>
+                {/* Enroll error message (e.g. "Course is not published") */}
                 {enrollError && <p className="text-xs text-destructive">{enrollError}</p>}
                 <button
                   onClick={handleEnroll}

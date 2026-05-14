@@ -1,3 +1,6 @@
+// LandingPage.js — Public marketing page shown to unauthenticated visitors.
+// Sections: hero banner, features grid, how-it-works steps, footer.
+
 import {
   Video,
   ClipboardList,
@@ -11,6 +14,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import Navbar from "@/components/Navbar";
 
+// Feature cards shown in the "Why Learn With Us?" section
 const features = [
   {
     icon: Video,
@@ -38,6 +42,7 @@ const features = [
   },
 ];
 
+// Step-by-step onboarding guide shown in the "How It Works" section
 const steps = [
   {
     number: "01",
@@ -67,14 +72,16 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      {/* Public navbar with Log In / Get Started buttons */}
       <Navbar />
 
-      {/* Hero */}
+      {/* ── Hero Section ──────────────────────────────────────────────────── */}
+      {/* Background image with a primary-color overlay for readability */}
       <section
         className="relative text-white py-36 px-6 bg-cover bg-center"
         style={{ backgroundImage: "url('/hero.png')" }}
       >
-        {/* Blue overlay */}
+        {/* Semi-transparent blue overlay on top of the hero image */}
         <div className="absolute inset-0 bg-primary/85" />
 
         <div className="relative z-10 max-w-3xl mx-auto text-center">
@@ -85,6 +92,7 @@ export default function LandingPage() {
             Gain real skills through structured courses, hands-on quizzes, and
             AI-powered guidance — all in one place.
           </p>
+          {/* Two CTAs: primary (register) and secondary (login) */}
           <div className="flex gap-4 justify-center flex-wrap">
             <Button
               size="lg"
@@ -104,7 +112,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Features */}
+      {/* ── Features Grid ─────────────────────────────────────────────────── */}
       <section className="py-20 px-6 bg-white">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-12">
@@ -115,12 +123,14 @@ export default function LandingPage() {
               Everything you need to grow your skills, all in one platform.
             </p>
           </div>
+          {/* Responsive grid: 1 col → 2 col → 4 col */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {features.map(({ icon: Icon, title, description }) => (
               <div
                 key={title}
                 className="p-6 rounded-xl border border-border hover:shadow-md hover:border-primary/30 transition-all duration-200"
               >
+                {/* Icon badge */}
                 <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
                   <Icon className="w-6 h-6 text-primary" />
                 </div>
@@ -134,7 +144,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* How It Works */}
+      {/* ── How It Works ──────────────────────────────────────────────────── */}
       <section className="py-20 px-6 bg-secondary">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-14">
@@ -151,10 +161,12 @@ export default function LandingPage() {
                 key={number}
                 className="flex flex-col items-center text-center"
               >
+                {/* Step circle with a small number badge in the top-right corner */}
                 <div className="relative mb-5">
                   <div className="w-16 h-16 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-md">
                     <Icon className="w-7 h-7" />
                   </div>
+                  {/* Strip the leading zero from "01" → "1" for the badge */}
                   <span className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-white border border-border text-xs font-bold text-primary flex items-center justify-center shadow-sm">
                     {number.replace("0", "")}
                   </span>
@@ -169,7 +181,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Footer */}
+      {/* ── Footer ────────────────────────────────────────────────────────── */}
       <footer className="bg-[#001a3d] text-white py-10 px-6 mt-auto">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div>
@@ -178,6 +190,7 @@ export default function LandingPage() {
               © 2026 LearnLite. All rights reserved.
             </p>
           </div>
+          {/* Quick links for visitors who scroll to the footer */}
           <div className="flex gap-6 text-sm text-white/70">
             <a href="/login" className="hover:text-white transition-colors">
               Log In

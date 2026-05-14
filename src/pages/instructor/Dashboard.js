@@ -1,3 +1,7 @@
+// instructor/Dashboard.js — Instructor home page.
+// Shows aggregate stats (total courses, students, average completion)
+// and a card grid of all the instructor's courses with per-course analytics and ratings.
+
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BookOpen, Users, TrendingUp, Plus, BarChart2, Star } from "lucide-react";
@@ -8,11 +12,13 @@ import { getCourseReviews } from "@/api/reviews";
 import { fetchThumbnailUrl } from "@/api/courses";
 import { getUser } from "@/lib/auth";
 
+// Capitalise the first character of a string (course titles are stored lowercase)
 function capitalize(str) {
   if (!str) return "";
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
+// Cycle through these colours for course cards that have no thumbnail
 const placeholderColors = [
   "bg-blue-100 text-blue-600",
   "bg-violet-100 text-violet-600",
@@ -21,6 +27,9 @@ const placeholderColors = [
   "bg-rose-100 text-rose-600",
 ];
 
+// Lazy-loads and displays the course thumbnail image.
+// Falls back to a coloured placeholder icon if no thumbnail is set or fetch fails.
+// Object URL is revoked on unmount to prevent memory leaks.
 function CourseThumbnail({ courseId, hasThumbnail, id }) {
   const [src, setSrc] = useState(null);
 
@@ -30,12 +39,14 @@ function CourseThumbnail({ courseId, hasThumbnail, id }) {
     fetchThumbnailUrl(courseId)
       .then((url) => { objectUrl = url; setSrc(url); })
       .catch(() => setSrc(null));
+    // Cleanup: revoke the object URL so the browser releases the Blob from memory
     return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [courseId, hasThumbnail]);
 
   if (src) {
     return <img src={src} alt="" className="w-full h-36 rounded-t-xl object-cover" />;
   }
+  // Deterministic colour picked by course id so the same course always shows the same colour
   return (
     <div className={`w-full h-36 rounded-t-xl flex items-center justify-center ${placeholderColors[id % placeholderColors.length]}`}>
       <BookOpen className="w-10 h-10 opacity-60" />
@@ -43,6 +54,7 @@ function CourseThumbnail({ courseId, hasThumbnail, id }) {
   );
 }
 
+// Summary stat card used in the top row (courses, students, avg. completion)
 function StatCard({ icon: Icon, label, value }) {
   return (
     <div className="bg-white rounded-xl border border-border p-5 flex items-center gap-4">
@@ -57,6 +69,7 @@ function StatCard({ icon: Icon, label, value }) {
   );
 }
 
+// Thin horizontal progress bar for average lesson completion percentage
 function ProgressBar({ value }) {
   return (
     <div className="w-full bg-secondary rounded-full h-2">
@@ -65,6 +78,7 @@ function ProgressBar({ value }) {
   );
 }
 
+// Five-star rating display with filled/empty star icons and numeric label
 function StarRating({ rating, count }) {
   const filled = Math.round(rating);
   return (
@@ -85,10 +99,12 @@ function StarRating({ rating, count }) {
 
 export default function InstructorDashboard() {
   const navigate = useNavigate();
-  const user = getUser();
+  const user = getUser(); // Read instructor's id from the JWT payload
 
   const [courses, setCourses] = useState([]);
+  // analyticsMap: { [courseId]: analyticsObject } — populated in parallel with the courses
   const [analytics, setAnalytics] = useState({});
+  // ratingsMap: { [courseId]: reviewsObject }
   const [ratings, setRatings] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -99,11 +115,13 @@ export default function InstructorDashboard() {
         const data = await getInstructorCourses(user.id);
         setCourses(data);
 
+        // Fetch analytics and reviews for all courses in parallel for speed
         const [analyticsResults, reviewResults] = await Promise.all([
           Promise.all(data.map((c) => getCourseAnalytics(c.id).catch(() => null))),
           Promise.all(data.map((c) => getCourseReviews(c.id).catch(() => null))),
         ]);
 
+        // Build lookup maps keyed by course id for O(1) access in the render
         const analyticsMap = {};
         const ratingsMap = {};
         data.forEach((c, i) => {
@@ -122,6 +140,7 @@ export default function InstructorDashboard() {
     load();
   }, [user.id]);
 
+  // Aggregate stats derived from the analytics map
   const totalStudents = Object.values(analytics).reduce((sum, a) => sum + (a?.total_enrolled ?? 0), 0);
   const avgCompletion =
     Object.values(analytics).length > 0
@@ -132,7 +151,7 @@ export default function InstructorDashboard() {
   return (
     <InstructorLayout>
       <div className="p-8 max-w-6xl mx-auto">
-        {/* Header */}
+        {/* ── Page header ───────────────────────────────────────────────── */}
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
@@ -144,16 +163,17 @@ export default function InstructorDashboard() {
           </Button>
         </div>
 
-        {/* Stats */}
+        {/* ── Aggregate stat cards ──────────────────────────────────────── */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-          <StatCard icon={BookOpen} label="Total Courses"   value={courses.length} />
-          <StatCard icon={Users}    label="Total Students"  value={totalStudents} />
-          <StatCard icon={TrendingUp} label="Avg. Completion" value={`${Math.round(avgCompletion)}%`} />
+          <StatCard icon={BookOpen}   label="Total Courses"     value={courses.length} />
+          <StatCard icon={Users}      label="Total Students"    value={totalStudents} />
+          <StatCard icon={TrendingUp} label="Avg. Completion"   value={`${Math.round(avgCompletion)}%`} />
         </div>
 
-        {/* Courses */}
+        {/* ── Courses section ───────────────────────────────────────────── */}
         <h2 className="text-lg font-semibold text-foreground mb-4">My Courses</h2>
 
+        {/* Loading skeleton cards */}
         {loading && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {[1, 2, 3].map((i) => (
@@ -171,6 +191,7 @@ export default function InstructorDashboard() {
 
         {error && <p className="text-destructive text-sm">{error}</p>}
 
+        {/* Empty state — first-time instructor with no courses yet */}
         {!loading && !error && courses.length === 0 && (
           <div className="bg-white rounded-xl border border-border p-12 text-center">
             <BarChart2 className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
@@ -183,11 +204,12 @@ export default function InstructorDashboard() {
           </div>
         )}
 
+        {/* Course cards grid */}
         {!loading && !error && courses.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {courses.map((course) => {
-              const a = analytics[course.id];
-              const r = ratings[course.id];
+              const a = analytics[course.id];           // Analytics for this course
+              const r = ratings[course.id];             // Reviews for this course
               const completion = a?.avg_completion_percentage ?? 0;
               const hasRating = r && r.total_reviews > 0;
 
@@ -196,6 +218,7 @@ export default function InstructorDashboard() {
                   key={course.id}
                   className="bg-white rounded-xl border border-border hover:shadow-md transition-shadow flex flex-col"
                 >
+                  {/* Thumbnail — image or coloured placeholder */}
                   <CourseThumbnail
                     courseId={course.id}
                     hasThumbnail={!!course.thumbnail_url}
@@ -203,6 +226,7 @@ export default function InstructorDashboard() {
                   />
 
                   <div className="p-4 flex flex-col flex-1">
+                    {/* Title + Live/Draft status badge */}
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <h3 className="font-semibold text-foreground leading-snug">
                         {capitalize(course.title)}
@@ -218,11 +242,12 @@ export default function InstructorDashboard() {
                       )}
                     </div>
 
+                    {/* Course description */}
                     <p className="text-xs text-muted-foreground line-clamp-2 mb-3">
                       {capitalize(course.description)}
                     </p>
 
-                    {/* Rating */}
+                    {/* Star rating or "No reviews yet" placeholder */}
                     <div className="mb-4">
                       {hasRating ? (
                         <StarRating rating={r.average_rating} count={r.total_reviews} />
@@ -231,7 +256,7 @@ export default function InstructorDashboard() {
                       )}
                     </div>
 
-                    {/* Metrics */}
+                    {/* Three enrollment metrics in a mini grid */}
                     <div className="grid grid-cols-3 gap-2 text-center mb-4">
                       <div>
                         <p className="text-sm font-semibold text-foreground">{a?.total_enrolled ?? "—"}</p>
@@ -247,7 +272,7 @@ export default function InstructorDashboard() {
                       </div>
                     </div>
 
-                    {/* Completion bar */}
+                    {/* Average completion progress bar */}
                     <div className="mb-4">
                       <div className="flex justify-between text-xs text-muted-foreground mb-1">
                         <span>Avg. completion</span>
@@ -256,6 +281,7 @@ export default function InstructorDashboard() {
                       <ProgressBar value={completion} />
                     </div>
 
+                    {/* Navigate to the manage course page */}
                     <Button
                       variant="outline"
                       className="w-full mt-auto border-primary text-primary hover:bg-primary hover:text-primary-foreground"

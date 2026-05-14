@@ -1,3 +1,7 @@
+// RegisterPage.js — Two-panel registration form.
+// The user selects a role (student / instructor) before submitting.
+// After successful registration they are redirected to the login page.
+
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { GraduationCap, BookOpen } from "lucide-react";
@@ -5,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { register } from "@/api/auth";
 
+// Role selector options rendered as toggle buttons
 const roles = [
   {
     value: "student",
@@ -21,17 +26,19 @@ const roles = [
 export default function RegisterPage() {
   const navigate = useNavigate();
 
+  // Full form state — confirm_password is validated client-side and not sent to the API
   const [form, setForm] = useState({
     first_name: "",
     last_name: "",
     email: "",
     password: "",
     confirm_password: "",
-    role: "student",
+    role: "student", // default role
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Generic change handler for all text inputs
   function handleChange(e) {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   }
@@ -40,6 +47,7 @@ export default function RegisterPage() {
     e.preventDefault();
     setError("");
 
+    // Client-side validation before hitting the API
     if (form.password.length < 8) {
       setError("Password must be at least 8 characters.");
       return;
@@ -51,6 +59,7 @@ export default function RegisterPage() {
 
     setLoading(true);
     try {
+      // Send only the fields the backend expects (omit confirm_password)
       await register({
         first_name: form.first_name,
         last_name: form.last_name,
@@ -58,9 +67,10 @@ export default function RegisterPage() {
         password: form.password,
         role: form.role,
       });
+      // Redirect to login on success so the user authenticates with their new account
       navigate("/login");
     } catch (err) {
-      setError(err.message);
+      setError(err.message); // e.g. "Email already in use"
     } finally {
       setLoading(false);
     }
@@ -68,12 +78,12 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen flex">
-      {/* Left panel */}
+      {/* ── Left decorative panel (desktop only) ──────────────────────── */}
       <div
         className="hidden md:flex flex-col justify-between w-5/12 text-primary-foreground p-12 relative bg-cover bg-center"
         style={{ backgroundImage: "url('/auth-bg.png')" }}
       >
-        {/* Blue overlay */}
+        {/* Blue overlay for text legibility */}
         <div className="absolute inset-0 bg-primary/80" />
         <Link to="/" className="relative z-10 text-2xl font-bold tracking-tight">
           LearnLite
@@ -90,10 +100,10 @@ export default function RegisterPage() {
         <p className="relative z-10 text-sm opacity-50">© 2026 LearnLite</p>
       </div>
 
-      {/* Right panel */}
+      {/* ── Right form panel ──────────────────────────────────────────── */}
       <div className="flex flex-col justify-center items-center flex-1 px-6 py-12 bg-white">
         <div className="w-full max-w-md">
-          {/* Mobile logo */}
+          {/* Mobile-only logo */}
           <Link
             to="/"
             className="md:hidden text-xl font-bold text-primary block mb-8"
@@ -112,7 +122,8 @@ export default function RegisterPage() {
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Role selector */}
+            {/* ── Role selector ─────────────────────────────────────────── */}
+            {/* Two toggle buttons — clicking one sets form.role and highlights it */}
             <div className="grid grid-cols-2 gap-3 mb-2">
               {roles.map(({ value, label, icon: Icon }) => (
                 <button
@@ -122,7 +133,7 @@ export default function RegisterPage() {
                   className={cn(
                     "flex items-center justify-center gap-2 h-11 rounded-lg border text-sm font-medium transition-colors",
                     form.role === value
-                      ? "bg-primary text-primary-foreground border-primary"
+                      ? "bg-primary text-primary-foreground border-primary" // Selected state
                       : "border-border text-foreground hover:bg-secondary"
                   )}
                 >
@@ -132,7 +143,7 @@ export default function RegisterPage() {
               ))}
             </div>
 
-            {/* Name row */}
+            {/* ── Name row (two inputs side by side) ───────────────────── */}
             <div className="flex gap-3">
               <div className="flex-1 space-y-1">
                 <label className="text-sm font-medium text-foreground">
@@ -162,7 +173,7 @@ export default function RegisterPage() {
               </div>
             </div>
 
-            {/* Email */}
+            {/* ── Email ────────────────────────────────────────────────── */}
             <div className="space-y-1">
               <label className="text-sm font-medium text-foreground">
                 Email
@@ -178,7 +189,7 @@ export default function RegisterPage() {
               />
             </div>
 
-            {/* Password */}
+            {/* ── Password ─────────────────────────────────────────────── */}
             <div className="space-y-1">
               <label className="text-sm font-medium text-foreground">
                 Password
@@ -194,7 +205,7 @@ export default function RegisterPage() {
               />
             </div>
 
-            {/* Confirm password */}
+            {/* ── Confirm Password ──────────────────────────────────────── */}
             <div className="space-y-1">
               <label className="text-sm font-medium text-foreground">
                 Confirm Password
@@ -210,6 +221,7 @@ export default function RegisterPage() {
               />
             </div>
 
+            {/* Inline validation / API error message */}
             {error && (
               <p className="text-sm text-destructive font-medium">{error}</p>
             )}

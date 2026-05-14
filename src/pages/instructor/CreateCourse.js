@@ -1,3 +1,8 @@
+// instructor/CreateCourse.js — Form to create a new course.
+// Steps: upload optional thumbnail → fill title & description → add skill tags → submit.
+// After the course is created the user is navigated to the Manage Course page.
+// If the course creation succeeds but thumbnail upload fails, a retry only uploads the thumbnail.
+
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { ImagePlus, X, Plus } from "lucide-react";
@@ -8,18 +13,28 @@ import { createCourse, uploadThumbnail } from "@/api/instructor";
 export default function CreateCourse() {
   const navigate = useNavigate();
 
+  // ── Form state ─────────────────────────────────────────────────────────
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [skills, setSkills] = useState([]);
+  const [skills, setSkills] = useState([]); // Array of lowercase skill strings
+
+  // Ref for the uncontrolled skill text input (we only read it on add, not every keystroke)
   const skillInputRef = useRef();
+
+  // Thumbnail selected by the user (File object) + an object URL for preview
   const [thumbnail, setThumbnail] = useState(null);
   const [thumbnailPreview, setThumbnailPreview] = useState(null);
+
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  // Saved after first successful createCourse call so retries skip creation and only re-upload the thumbnail
   const [createdCourseId, setCreatedCourseId] = useState(null);
 
+  // Ref for the hidden file input element (triggered programmatically)
   const fileRef = useRef();
 
+  // When the user picks an image file, store it and generate a local preview URL
   function handleThumbnailChange(e) {
     const file = e.target.files[0];
     if (!file) return;
@@ -27,13 +42,15 @@ export default function CreateCourse() {
     setThumbnailPreview(URL.createObjectURL(file));
   }
 
+  // Clear the selected thumbnail and revoke the preview object URL to free memory
   function removeThumbnail() {
     setThumbnail(null);
     if (thumbnailPreview) URL.revokeObjectURL(thumbnailPreview);
     setThumbnailPreview(null);
-    fileRef.current.value = "";
+    fileRef.current.value = ""; // Reset the file input so the same file can be re-selected
   }
 
+  // Read the skill input, normalise to lowercase, and push to the skills array if unique
   function addSkill() {
     const val = skillInputRef.current?.value.trim().toLowerCase() ?? "";
     if (!val || skills.includes(val)) return;
@@ -41,6 +58,7 @@ export default function CreateCourse() {
     skillInputRef.current.value = "";
   }
 
+  // Allow pressing Enter in the skill input to add the skill without clicking Add
   function handleSkillKeyDown(e) {
     if (e.key === "Enter") { e.preventDefault(); addSkill(); }
   }
@@ -54,8 +72,8 @@ export default function CreateCourse() {
     setError("");
     setSubmitting(true);
     try {
-      // If course was already created (thumbnail upload failed on a prior attempt),
-      // skip creation and only retry the thumbnail upload.
+      // If a previous attempt created the course but failed on thumbnail upload,
+      // skip creation and only retry the thumbnail upload step.
       let courseId = createdCourseId;
       if (!courseId) {
         const course = await createCourse({
@@ -64,13 +82,16 @@ export default function CreateCourse() {
           skills: skills.length > 0 ? skills : undefined,
         });
         courseId = course.id;
+        // Save the id so a retry doesn't create a duplicate course
         setCreatedCourseId(courseId);
       }
 
+      // Upload thumbnail separately (multipart) only if the user selected one
       if (thumbnail) {
         await uploadThumbnail(courseId, thumbnail);
       }
 
+      // Navigate to the manage page for the newly created course
       navigate(`/instructor/courses/${courseId}`);
     } catch (err) {
       setError(err.message);
@@ -79,6 +100,7 @@ export default function CreateCourse() {
     }
   }
 
+  // Validation: title 1–60 chars, description 1–250 chars
   const titleOk = title.trim().length >= 1 && title.trim().length <= 60;
   const descOk = description.trim().length >= 1 && description.trim().length <= 250;
   const canSubmit = titleOk && descOk && !submitting;
@@ -86,16 +108,17 @@ export default function CreateCourse() {
   return (
     <InstructorLayout>
       <div className="p-8 max-w-2xl mx-auto">
-        {/* Header */}
+        {/* Page header */}
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-foreground">Create Course</h1>
           <p className="text-muted-foreground text-sm mt-1">Fill in the details to create a new course</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Thumbnail */}
+          {/* ── Thumbnail picker ──────────────────────────────────────── */}
           <div className="bg-white rounded-xl border border-border p-6">
             <label className="block text-sm font-medium text-foreground mb-3">Thumbnail</label>
+            {/* Hidden file input — triggered by the dashed upload button below */}
             <input
               ref={fileRef}
               type="file"
@@ -104,6 +127,7 @@ export default function CreateCourse() {
               onChange={handleThumbnailChange}
             />
             {thumbnailPreview ? (
+              // Preview with an X button to remove the selection
               <div className="relative w-full h-48 rounded-lg overflow-hidden group">
                 <img src={thumbnailPreview} alt="" className="w-full h-full object-cover" />
                 <button
@@ -115,6 +139,7 @@ export default function CreateCourse() {
                 </button>
               </div>
             ) : (
+              // Dashed drop-zone button
               <button
                 type="button"
                 onClick={() => fileRef.current.click()}
@@ -127,12 +152,13 @@ export default function CreateCourse() {
             )}
           </div>
 
-          {/* Title + Description */}
+          {/* ── Title + Description ───────────────────────────────────── */}
           <div className="bg-white rounded-xl border border-border p-6 space-y-5">
-            {/* Title */}
+            {/* Title with character counter */}
             <div>
               <div className="flex justify-between mb-1.5">
                 <label className="text-sm font-medium text-foreground">Title <span className="text-destructive">*</span></label>
+                {/* Counter turns red when the limit is exceeded */}
                 <span className={`text-xs ${title.length > 60 ? "text-destructive" : "text-muted-foreground"}`}>
                   {title.length}/60
                 </span>
@@ -147,7 +173,7 @@ export default function CreateCourse() {
               />
             </div>
 
-            {/* Description */}
+            {/* Description with character counter */}
             <div>
               <div className="flex justify-between mb-1.5">
                 <label className="text-sm font-medium text-foreground">Description <span className="text-destructive">*</span></label>
@@ -166,10 +192,11 @@ export default function CreateCourse() {
             </div>
           </div>
 
-          {/* Skills */}
+          {/* ── Skills tag input ──────────────────────────────────────── */}
           <div className="bg-white rounded-xl border border-border p-6">
             <label className="block text-sm font-medium text-foreground mb-3">Skills</label>
             <div className="flex gap-2 mb-3">
+              {/* Uncontrolled input — value read on add, not tracked on every keystroke */}
               <input
                 ref={skillInputRef}
                 type="text"
@@ -182,6 +209,7 @@ export default function CreateCourse() {
                 Add
               </Button>
             </div>
+            {/* Pill list of added skills, each with a remove button */}
             {skills.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {skills.map((skill) => (
@@ -201,7 +229,7 @@ export default function CreateCourse() {
 
           {error && <p className="text-destructive text-sm">{error}</p>}
 
-          {/* Actions */}
+          {/* ── Form actions ──────────────────────────────────────────── */}
           <div className="flex justify-end gap-3">
             <Button
               type="button"
@@ -211,6 +239,7 @@ export default function CreateCourse() {
             >
               Cancel
             </Button>
+            {/* Disabled until required fields pass validation */}
             <Button type="submit" disabled={!canSubmit}>
               {submitting ? "Creating..." : "Create Course"}
             </Button>

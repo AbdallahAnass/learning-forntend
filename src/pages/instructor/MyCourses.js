@@ -1,3 +1,7 @@
+// instructor/MyCourses.js — Table view of all the instructor's courses.
+// Similar to the Dashboard but shows a compact table instead of cards,
+// useful when the instructor has many courses.
+
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BookOpen, Plus, Settings } from "lucide-react";
@@ -6,11 +10,13 @@ import { Button } from "@/components/ui/button";
 import { getInstructorCourses, getCourseAnalytics } from "@/api/instructor";
 import { getUser } from "@/lib/auth";
 
+// Capitalise the first character of a string (titles are stored lowercase in the DB)
 function capitalize(str) {
   if (!str) return "";
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
+// Thin horizontal bar showing average lesson completion percentage for a course
 function ProgressBar({ value }) {
   return (
     <div className="flex items-center gap-2">
@@ -24,9 +30,10 @@ function ProgressBar({ value }) {
 
 export default function MyCourses() {
   const navigate = useNavigate();
-  const user = getUser();
+  const user = getUser(); // Read instructor id from JWT payload
 
   const [courses, setCourses] = useState([]);
+  // analyticsMap: { [courseId]: analyticsObject } — built after courses load
   const [analytics, setAnalytics] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -37,9 +44,11 @@ export default function MyCourses() {
         const data = await getInstructorCourses(user.id);
         setCourses(data);
 
+        // Fetch analytics for every course in parallel; failures are non-fatal
         const results = await Promise.all(
           data.map((c) => getCourseAnalytics(c.id).catch(() => null))
         );
+        // Build { courseId → analyticsObj } lookup map
         const map = {};
         data.forEach((c, i) => { if (results[i]) map[c.id] = results[i]; });
         setAnalytics(map);
@@ -55,7 +64,7 @@ export default function MyCourses() {
   return (
     <InstructorLayout>
       <div className="p-8 max-w-6xl mx-auto">
-        {/* Header */}
+        {/* ── Page header ───────────────────────────────────────────────── */}
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-2xl font-bold text-foreground">My Courses</h1>
@@ -67,8 +76,9 @@ export default function MyCourses() {
           </Button>
         </div>
 
-        {/* Table */}
+        {/* ── Course table card ─────────────────────────────────────────── */}
         <div className="bg-white rounded-xl border border-border overflow-hidden">
+          {/* Loading skeleton — one row per placeholder */}
           {loading && (
             <div className="divide-y divide-border">
               {[1, 2, 3].map((i) => (
@@ -93,6 +103,7 @@ export default function MyCourses() {
             </div>
           )}
 
+          {/* Empty state for first-time instructors */}
           {!loading && !error && courses.length === 0 && (
             <div className="p-12 text-center">
               <BookOpen className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
@@ -105,6 +116,7 @@ export default function MyCourses() {
             </div>
           )}
 
+          {/* Courses table */}
           {!loading && !error && courses.length > 0 && (
             <table className="w-full text-sm">
               <thead>
@@ -113,7 +125,7 @@ export default function MyCourses() {
                   <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Students</th>
                   <th className="px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-40">Avg. Completion</th>
-                  <th className="px-6 py-3" />
+                  <th className="px-6 py-3" /> {/* Manage action column */}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -123,13 +135,13 @@ export default function MyCourses() {
 
                   return (
                     <tr key={course.id} className="hover:bg-secondary/30 transition-colors">
-                      {/* Course info */}
+                      {/* Course title + truncated description */}
                       <td className="px-6 py-4">
                         <p className="font-medium text-foreground leading-snug">{capitalize(course.title)}</p>
                         <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{capitalize(course.description)}</p>
                       </td>
 
-                      {/* Status */}
+                      {/* Published / Draft badge */}
                       <td className="px-4 py-4">
                         {course.published ? (
                           <span className="text-xs font-medium text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-0.5">
@@ -142,17 +154,17 @@ export default function MyCourses() {
                         )}
                       </td>
 
-                      {/* Students */}
+                      {/* Total enrolled student count */}
                       <td className="px-4 py-4 text-right">
                         <span className="font-medium text-foreground">{a?.total_enrolled ?? "—"}</span>
                       </td>
 
-                      {/* Completion */}
+                      {/* Progress bar + percentage label */}
                       <td className="px-4 py-4 w-40">
                         <ProgressBar value={completion} />
                       </td>
 
-                      {/* Action */}
+                      {/* Manage button navigates to the detailed course editor */}
                       <td className="px-6 py-4 text-right">
                         <Button
                           variant="outline"

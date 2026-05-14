@@ -1,8 +1,14 @@
+// admin/Users.js — User management page for administrators.
+// Displays students and instructors in separate tabs; allows deleting individual users.
+// Deletion requires a confirmation dialog to prevent accidental removal.
+
 import { useEffect, useState } from "react";
 import { Trash2, Users } from "lucide-react";
 import AdminLayout from "@/components/AdminLayout";
 import { listStudents, listInstructors, deleteStudent, deleteInstructor } from "@/api/admin";
 
+// Modal confirmation dialog shown before a destructive delete action.
+// Renders over a semi-transparent backdrop so the user cannot accidentally miss it.
 function ConfirmDialog({ message, onConfirm, onCancel }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
@@ -27,10 +33,16 @@ function ConfirmDialog({ message, onConfirm, onCancel }) {
   );
 }
 
+// Reusable table component for both students and instructors.
+// users=null → skeleton loading; users=[] → empty state; otherwise renders rows.
+// onDelete: async (userId) => void — parent handles the actual API call.
 function UserTable({ users, onDelete }) {
+  // confirm: the user object awaiting deletion confirmation (null = dialog closed)
   const [confirm, setConfirm] = useState(null);
+  // deleting: the id of the row currently being deleted (shows spinner, disables button)
   const [deleting, setDeleting] = useState(null);
 
+  // Dismiss the dialog, call the parent's onDelete, wait for it to complete
   async function handleDelete(user) {
     setConfirm(null);
     setDeleting(user.id);
@@ -41,6 +53,7 @@ function UserTable({ users, onDelete }) {
     }
   }
 
+  // Skeleton state while the API call is in-flight
   if (users === null) {
     return (
       <div className="space-y-2">
@@ -51,6 +64,7 @@ function UserTable({ users, onDelete }) {
     );
   }
 
+  // Empty state
   if (users.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -62,6 +76,7 @@ function UserTable({ users, onDelete }) {
 
   return (
     <>
+      {/* Confirmation dialog — only rendered when a delete is pending */}
       {confirm && (
         <ConfirmDialog
           message={`Delete ${confirm.first_name} ${confirm.last_name}? This cannot be undone.`}
@@ -75,7 +90,7 @@ function UserTable({ users, onDelete }) {
             <tr className="border-b border-border bg-secondary/50">
               <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Name</th>
               <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Email</th>
-              <th className="px-4 py-3" />
+              <th className="px-4 py-3" /> {/* Actions column — no header label */}
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -86,6 +101,7 @@ function UserTable({ users, onDelete }) {
                 </td>
                 <td className="px-4 py-3 text-muted-foreground">{user.email}</td>
                 <td className="px-4 py-3 text-right">
+                  {/* Clicking opens the confirm dialog — not the delete action directly */}
                   <button
                     onClick={() => setConfirm(user)}
                     disabled={deleting === user.id}
@@ -104,16 +120,20 @@ function UserTable({ users, onDelete }) {
 }
 
 export default function AdminUsers() {
+  // tab: which user type is currently displayed ("students" | "instructors")
   const [tab, setTab] = useState("students");
+  // Both lists fetched in parallel on mount; null while loading
   const [students, setStudents] = useState(null);
   const [instructors, setInstructors] = useState(null);
   const [error, setError] = useState("");
 
+  // Fetch both lists in parallel on mount
   useEffect(() => {
     listStudents().then(setStudents).catch((e) => setError(e.message));
     listInstructors().then(setInstructors).catch((e) => setError(e.message));
   }, []);
 
+  // Remove the deleted student from local state to avoid a full re-fetch
   async function handleDeleteStudent(id) {
     await deleteStudent(id);
     setStudents((prev) => prev.filter((u) => u.id !== id));
@@ -124,6 +144,7 @@ export default function AdminUsers() {
     setInstructors((prev) => prev.filter((u) => u.id !== id));
   }
 
+  // Tab configuration with live count badges
   const tabs = [
     { key: "students",    label: "Students",    count: students?.length    },
     { key: "instructors", label: "Instructors",  count: instructors?.length },
@@ -139,7 +160,7 @@ export default function AdminUsers() {
 
         {error && <p className="text-sm text-destructive mb-4">{error}</p>}
 
-        {/* Tabs */}
+        {/* Tab bar — underline style; -mb-px makes the active border connect to the table */}
         <div className="flex gap-1 mb-5 border-b border-border">
           {tabs.map(({ key, label, count }) => (
             <button
@@ -152,6 +173,7 @@ export default function AdminUsers() {
               }`}
             >
               {label}
+              {/* Show count badge once the data has loaded */}
               {count !== undefined && (
                 <span className="ml-2 text-xs bg-secondary text-muted-foreground rounded-full px-1.5 py-0.5">
                   {count}
@@ -161,6 +183,7 @@ export default function AdminUsers() {
           ))}
         </div>
 
+        {/* Render the correct table based on the active tab */}
         {tab === "students" && (
           <UserTable users={students} onDelete={handleDeleteStudent} />
         )}

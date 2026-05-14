@@ -1,3 +1,7 @@
+// App.js — Root component that defines all application routes.
+// Every route that requires authentication is wrapped in <ProtectedRoute role="...">
+// which redirects unauthenticated or wrong-role users before the page renders.
+
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import LandingPage from "@/pages/LandingPage";
 import RegisterPage from "@/pages/RegisterPage";
@@ -20,11 +24,15 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 
 function App() {
   return (
+    // BrowserRouter provides the history context for all nested Routes
     <BrowserRouter>
       <Routes>
+        {/* ── Public routes (no auth required) ─────────────────────────── */}
         <Route path="/" element={<LandingPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/login" element={<LoginPage />} />
+
+        {/* ── Instructor routes ────────────────────────────────────────── */}
         <Route
           path="/instructor/dashboard"
           element={
@@ -49,6 +57,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+        {/* :courseId is the dynamic segment used by ManageCourse to fetch course data */}
         <Route
           path="/instructor/courses/:courseId"
           element={
@@ -57,6 +66,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+        {/* :lessonId identifies which lesson's quiz to edit */}
         <Route
           path="/instructor/courses/:courseId/lessons/:lessonId/quiz"
           element={
@@ -65,6 +75,8 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        {/* ── Student routes ────────────────────────────────────────────── */}
         <Route
           path="/courses"
           element={
@@ -89,6 +101,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+        {/* /learn loads the lesson viewer with the sidebar module list */}
         <Route
           path="/courses/:courseId/learn"
           element={
@@ -105,6 +118,8 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        {/* ── Admin routes ──────────────────────────────────────────────── */}
         <Route
           path="/admin/dashboard"
           element={
@@ -129,9 +144,12 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        {/* ── Shared route (any authenticated role) ────────────────────── */}
         <Route
           path="/profile"
           element={
+            // No role prop = any logged-in user can access
             <ProtectedRoute>
               <ProfilePage />
             </ProtectedRoute>
